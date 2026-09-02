@@ -1,4 +1,5 @@
 {
+  "description": "真题词库微信小程序（源码在 miniprogram/ 子目录）",
   "setting": {
     "es6": true,
     "postcss": true,
@@ -12,14 +13,26 @@
       "outputPath": ""
     },
     "useCompilerPlugins": false,
-    "minifyWXML": true
+    "minifyWXML": true,
+    "urlCheck": true,
+    "coverView": true,
+    "lazyloadPlaceholderEnable": false,
+    "skylineRenderEnable": false,
+    "preloadBackgroundData": false,
+    "autoAudits": false,
+    "showShadowRootInWxmlPanel": true,
+    "compileHotReLoad": true
   },
   "compileType": "miniprogram",
+  "libVersion": "3.17.2",
   "simulatorPluginLibVersion": {},
   "packOptions": {
     "ignore": [],
     "include": []
   },
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "miniprogram/cloudfunctions/",
   "appid": "wx206fe86c8a748948",
+  "projectname": "english-vocab",
   "editorSetting": {}
 }
