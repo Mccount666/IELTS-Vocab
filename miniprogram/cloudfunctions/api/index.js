@@ -28,6 +28,7 @@ exports.main = async (event) => {
 
     const action = event.action || event.route || event.op;
     const data = event.data || {};
+    await ensureCollections();
     await ensureUser(openid);
 
     const routes = {
@@ -143,6 +144,32 @@ async function setSiteSetting(key, value) {
   } else {
     await db.collection('site_settings').add({ data: { key, value } });
   }
+}
+
+// 自举：云函数对所在环境有管理员权限，缺失的集合在首次调用时自动创建，
+// 免去在控制台手动建集合的步骤。进程内缓存避免每次调用都探测。
+let collectionsReady = false;
+
+async function ensureCollections() {
+  if (collectionsReady) return;
+  for (const name of COLLECTIONS) {
+    let exists = true;
+    try {
+      await db.collection(name).count();
+    } catch (err) {
+      exists = false;
+    }
+    if (!exists) {
+      try {
+        await db.createCollection(name);
+        console.log(`created collection: ${name}`);
+      } catch (err) {
+        // 并发调用时集合可能已被其他实例创建，忽略“已存在”类错误
+        console.warn(`createCollection ${name}:`, err.message || err);
+      }
+    }
+  }
+  collectionsReady = true;
 }
 
 async function ensureUser(openid) {

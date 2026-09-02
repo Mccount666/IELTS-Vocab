@@ -1,4 +1,5 @@
 <view class="container stack">
+  <view class="error-box" wx:if="{{error}}">⚠ {{error}}</view>
   <view class="hero card">
     <view class="hero-kicker">IELTS VOCAB</view>
     <view class="hero-title">从你的真题里背单词</view>

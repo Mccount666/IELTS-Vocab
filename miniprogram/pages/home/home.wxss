@@ -1,3 +1,14 @@
+.error-box {
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: #fff1f0;
+  border: 1rpx solid #ffa39e;
+  color: #b42318;
+  font-size: 26rpx;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
 .hero {
   background: linear-gradient(145deg, #effffd, #ffffff 58%, #e9f7ff);
 }
