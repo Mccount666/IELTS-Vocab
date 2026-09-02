@@ -19,6 +19,10 @@ Page({
     suggestions: [],
     result: {},
     sentences: [],
+    dict: null,
+    dictLoading: false,
+    dictMode: '',
+    translations: {},
   },
 
   onWordInput(e) {
@@ -56,11 +60,12 @@ Page({
   async submit() {
     const word = this.data.word.trim();
     if (!word) return toast('请输入单词');
-    this.setData({ loading: true, searched: true, suggestions: [] });
+    this.setData({ loading: true, searched: true, suggestions: [], dict: null, dictMode: '', translations: {} });
     try {
       const examType = examTypes[this.data.examIndex].value;
       const result = await api.search({ word, examType });
       this.setData({ result, sentences: result.sentences || [] });
+      this.loadDict(word);
     } catch (err) {
       toast(err.message || '查询失败');
     } finally {
@@ -68,10 +73,58 @@ Page({
     }
   },
 
+  // 释义卡：优先免费词典（无需 Key），LLM 释义按需点按钮
+  async loadDict(word) {
+    this.setData({ dictLoading: true, dict: null, dictMode: '' });
+    try {
+      const dict = await api.dictionaryLookup({ word });
+      if (dict && !dict.notFound) {
+        this.setData({ dict, dictMode: 'free' });
+      }
+    } catch (err) {
+      console.warn(err);
+    } finally {
+      this.setData({ dictLoading: false });
+    }
+  },
+
+  async aiDefine() {
+    if (!this.data.result.word) return;
+    this.setData({ dictLoading: true });
+    try {
+      const dict = await api.llmDefine({ word: this.data.result.word });
+      this.setData({ dict, dictMode: 'llm' });
+    } catch (err) {
+      toast(err.message || 'AI 释义失败');
+    } finally {
+      this.setData({ dictLoading: false });
+    }
+  },
+
+  async translateSentence(e) {
+    const id = e.currentTarget.dataset.id;
+    const text = e.currentTarget.dataset.text;
+    if (!text || this.data.translations[id]) return;
+    this.setData({ [`translations.${id}`]: '…' });
+    try {
+      const res = await api.llmTranslate({ text });
+      this.setData({ [`translations.${id}`]: res.translation || '' });
+    } catch (err) {
+      this.setData({ [`translations.${id}`]: '' });
+      toast(err.message || '翻译失败');
+    }
+  },
+
   async collectWord() {
     if (!this.data.result.word) return;
     try {
-      await api.addWordbook({ word: this.data.result.word });
+      const dict = this.data.dict || {};
+      await api.addWordbook({
+        word: this.data.result.word,
+        phonetic: dict.phonetic || '',
+        translation: dict.translation || '',
+        definition: dict.definition || '',
+      });
       toast('已加入生词本', 'success');
       this.submit();
     } catch (err) {

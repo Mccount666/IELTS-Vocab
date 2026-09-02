@@ -14,13 +14,14 @@
   <view class="card stack">
     <view>
       <view class="section-title">集成设置</view>
-      <view class="muted">Key 保存在 CloudBase 云数据库中，只由云函数读取。</view>
+      <view class="muted">Key 只保存在云端数据库，小程序端仅显示“已/未设置”，永不下发明文。查词、例句翻译需要 LLM；扫描 PDF 需 MinerU。</view>
     </view>
 
-    <input class="input" placeholder="LLM Base URL，可留空" value="{{form.llmBaseUrl}}" bindinput="onInput" data-field="llmBaseUrl" />
-    <input class="input" placeholder="LLM Model，可留空" value="{{form.llmModel}}" bindinput="onInput" data-field="llmModel" />
+    <input class="input" placeholder="LLM Base URL（如 https://api.openai.com/v1）" value="{{form.llmBaseUrl}}" bindinput="onInput" data-field="llmBaseUrl" />
+    <input class="input" placeholder="LLM Model（如 gpt-4o-mini / claude-3-5-haiku）" value="{{form.llmModel}}" bindinput="onInput" data-field="llmModel" />
     <input class="input" password placeholder="LLM API Key，留空则不修改" value="{{form.llmApiKey}}" bindinput="onInput" data-field="llmApiKey" />
-    <input class="input" password placeholder="MinerU Token，留空则不修改" value="{{form.mineruApiToken}}" bindinput="onInput" data-field="mineruApiToken" />
+    <input class="input" password placeholder="MinerU Token（扫描 PDF 用），留空则不修改" value="{{form.mineruApiToken}}" bindinput="onInput" data-field="mineruApiToken" />
+    <view class="muted protocol-hint">同时兼容 OpenAI Chat Completions 与 Anthropic Messages 接口：Base URL 含 anthropic 或模型名以 claude 开头时自动走 Anthropic 协议，其余走 OpenAI 协议。</view>
 
     <view class="muted">LLM Key：{{settings.llmKeySet ? '已设置' : '未设置'}} · MinerU：{{settings.mineruTokenSet ? '已设置' : '未设置'}}</view>
     <button class="primary-btn" loading="{{saving}}" bindtap="save">保存设置</button>

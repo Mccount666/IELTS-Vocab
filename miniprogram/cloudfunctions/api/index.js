@@ -49,6 +49,11 @@ exports.main = async (event) => {
       'stats.get': () => stats(openid, data),
       'settings.get': () => getSettings(openid),
       'settings.save': () => saveSettings(openid, data),
+      'llm.define': () => llmDefine(openid, data),
+      'llm.translate': () => llmTranslate(openid, data),
+      'dictionary.lookup': () => dictionaryLookup(openid, data),
+      'mineru.requestUploadUrls': () => mineruRequestUploadUrls(openid, data),
+      'mineru.batchResult': () => mineruBatchResult(openid, data),
     };
 
     if (!routes[action]) return fail(`未知操作：${action}`, 404);
@@ -444,6 +449,195 @@ async function saveSettings(openid, data) {
   if (rows.data.length) await db.collection('user_settings').doc(rows.data[0]._id).update({ data: payload });
   else await db.collection('user_settings').add({ data: { _openid: openid, ...payload } });
   return { ok: true };
+}
+
+// LLM / MinerU 集成层（临时片段文件，将被合并进 index.js 后删除）
+// 双协议自适应：OpenAI Chat Completions + Anthropic Messages。
+// Key 存 user_settings，只在云函数内使用，永不下发小程序端。
+
+function llmProtocol(settings) {
+  const base = String(settings.llmBaseUrl || '').toLowerCase();
+  const model = String(settings.llmModel || '').toLowerCase();
+  if (base.includes('anthropic') || model.startsWith('claude')) return 'anthropic';
+  return 'openai';
+}
+
+function buildLlmRequest(settings, system, user) {
+  const baseUrl = String(settings.llmBaseUrl || '').replace(/\/+$/, '');
+  const model = settings.llmModel || 'gpt-4o-mini';
+  const key = settings.llmApiKey || '';
+  if (llmProtocol(settings) === 'anthropic') {
+    return {
+      url: `${baseUrl}/v1/messages`,
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        system,
+        messages: [{ role: 'user', content: user }],
+      }),
+      parse: (json) => {
+        const block = (json.content || []).find((c) => c.type === 'text');
+        return block ? block.text : '';
+      },
+    };
+  }
+  return {
+    url: `${baseUrl}/chat/completions`,
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    }),
+    parse: (json) => (json.choices && json.choices[0] && json.choices[0].message ? json.choices[0].message.content : ''),
+  };
+}
+
+async function llmChat(settings, system, user) {
+  const req = buildLlmRequest(settings, system, user);
+  const resp = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
+  if (!resp.ok) {
+    const detail = (await resp.text().catch(() => '')).slice(0, 300);
+    throw Object.assign(new Error(`LLM 请求失败（${resp.status}）：${detail}`), { statusCode: 502 });
+  }
+  const json = await resp.json().catch(() => null);
+  if (!json) throw Object.assign(new Error('LLM 返回不是合法 JSON'), { statusCode: 502 });
+  const content = req.parse(json);
+  if (!content) throw Object.assign(new Error('LLM 返回内容为空'), { statusCode: 502 });
+  return content;
+}
+
+function parseJsonLoose(text) {
+  const cleaned = String(text || '').replace(/```json|```/g, '').trim();
+  try { return JSON.parse(cleaned); } catch (e) { /* 继续宽松提取 */ }
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try { return JSON.parse(cleaned.slice(start, end + 1)); } catch (e) { return null; }
+}
+
+async function llmDefine(openid, data) {
+  const settings = await getSettingsRow(openid);
+  if (!settings.llmApiKey) throw Object.assign(new Error('尚未配置 LLM API Key，请到「我的」页填写'), { statusCode: 400 });
+  const word = requireText(data.word, 'word').toLowerCase().slice(0, 80);
+  const cached = await db.collection('dictionary_cache').where({ word }).limit(1).get();
+  if (cached.data.length) {
+    const c = cached.data[0];
+    return { word, phonetic: c.phonetic, translation: c.translation, definition: c.definition, examples: JSON.parse(c.examples || '[]'), source: c.source, cached: true };
+  }
+  const system = '你是一位严谨的英汉词典编辑。只输出一个 JSON 对象，不要输出任何其他文字。';
+  const user =
+    `请为英文单词 "${word}" 编写词典条目，输出 JSON，格式：\n` +
+    `{"phonetic":"英式音标，形如 /əˈbændən/","translation":"中文释义：词性+含义，多个义项用「；」分隔","definition":"简明英文释义，一到两句","examples":[{"en":"英文例句","zh":"例句中文翻译"}]}\n` +
+    `examples 恰好给 2 条，例句要贴近雅思/托福学术或生活语境。`;
+  const content = await llmChat(settings, system, user);
+  const parsed = parseJsonLoose(content);
+  if (!parsed || !parsed.translation) throw Object.assign(new Error(`LLM 返回无法解析为词典条目：${String(content).slice(0, 200)}`), { statusCode: 502 });
+  const entry = {
+    word,
+    phonetic: parsed.phonetic || '',
+    translation: parsed.translation || '',
+    definition: parsed.definition || '',
+    examples: Array.isArray(parsed.examples) ? parsed.examples.slice(0, 4) : [],
+    source: `LLM（${settings.llmModel || 'default'}）`,
+  };
+  await db.collection('dictionary_cache').add({ data: { ...entry, examples: JSON.stringify(entry.examples), updatedAt: nowIso() } });
+  return { ...entry, cached: false };
+}
+
+async function llmTranslate(openid, data) {
+  const settings = await getSettingsRow(openid);
+  if (!settings.llmApiKey) throw Object.assign(new Error('尚未配置 LLM API Key，请到「我的」页填写'), { statusCode: 400 });
+  const text = requireText(data.text, 'text').slice(0, 2000);
+  const system = '你是专业翻译。把用户发来的英文翻译成自然流畅的简体中文，只输出译文本身，不要任何解释或引号。';
+  const content = await llmChat(settings, system, text);
+  return { translation: content.trim() };
+}
+
+// 免费词典兜底：dictionaryapi.dev（无需 Key），结果写进 dictionary_cache
+async function dictionaryLookup(openid, data) {
+  const word = requireText(data.word, 'word').toLowerCase().slice(0, 80);
+  const cached = await db.collection('dictionary_cache').where({ word }).limit(1).get();
+  if (cached.data.length) {
+    const c = cached.data[0];
+    return { word, phonetic: c.phonetic, translation: c.translation, definition: c.definition, examples: JSON.parse(c.examples || '[]'), source: c.source, cached: true };
+  }
+  const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`).catch(() => null);
+  const arr = resp && resp.ok ? await resp.json().catch(() => null) : null;
+  if (!Array.isArray(arr) || !arr.length) return { word, translation: '', definition: '', examples: [], source: '', cached: false, notFound: true };
+  const e = arr[0];
+  const phonetic = e.phonetic || (e.phonetics || []).map((p) => p.text).find(Boolean) || '';
+  const meanings = e.meanings || [];
+  const definition = (meanings[0] && meanings[0].definitions && meanings[0].definitions[0] && meanings[0].definitions[0].definition) || '';
+  const partOfSpeech = (meanings[0] && meanings[0].partOfSpeech) || '';
+  const examples = [];
+  for (const m of meanings) {
+    for (const d of m.definitions || []) {
+      if (d.example && examples.length < 2) examples.push({ en: d.example, zh: '' });
+    }
+  }
+  const entry = {
+    word,
+    phonetic,
+    translation: partOfSpeech ? `${partOfSpeech} ${definition}`.slice(0, 200) : '',
+    definition,
+    examples,
+    source: 'dictionaryapi.dev',
+  };
+  await db.collection('dictionary_cache').add({ data: { ...entry, examples: JSON.stringify(entry.examples), updatedAt: nowIso() } });
+  return { ...entry, cached: false };
+}
+
+// MinerU OCR（扫描 PDF）：v4 batch 流程
+const MINERU_BASE = 'https://mineru.net/api/v4';
+
+async function mineruRequestUploadUrls(openid, data) {
+  const settings = await getSettingsRow(openid);
+  if (!settings.mineruApiToken) throw Object.assign(new Error('尚未配置 MinerU Token，请到「我的」页填写'), { statusCode: 400 });
+  const files = Array.isArray(data.files) ? data.files.slice(0, 10) : [];
+  if (!files.length) throw Object.assign(new Error('缺少 files'), { statusCode: 400 });
+  const resp = await fetch(`${MINERU_BASE}/file-urls/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.mineruApiToken}` },
+    body: JSON.stringify({ files: files.map((f) => ({ name: f.name, is_ocr: true, data_id: f.dataId || f.name })) }),
+  });
+  const json = await resp.json().catch(() => null);
+  if (!resp.ok || !json) throw Object.assign(new Error(`MinerU 申请上传地址失败（${resp.status}）`), { statusCode: 502 });
+  return { batchId: json.data.batch_id, fileUrls: (json.data.file_urls || []).slice(0, files.length) };
+}
+
+async function mineruBatchResult(openid, data) {
+  const settings = await getSettingsRow(openid);
+  if (!settings.mineruApiToken) throw Object.assign(new Error('尚未配置 MinerU Token，请到「我的」页填写'), { statusCode: 400 });
+  const batchId = requireText(data.batchId, 'batchId');
+  const resp = await fetch(`${MINERU_BASE}/extract-results/batch/${encodeURIComponent(batchId)}`, {
+    headers: { Authorization: `Bearer ${settings.mineruApiToken}` },
+  });
+  const json = await resp.json().catch(() => null);
+  if (!resp.ok || !json) throw Object.assign(new Error(`MinerU 查询结果失败（${resp.status}）`), { statusCode: 502 });
+  const items = (json.data && json.data.extract_result) || [];
+  return {
+    items: items.map((it) => ({ state: it.state, fileName: it.file_name || '', fullZipUrl: it.full_zip_url || '', errMsg: it.err_msg || '' })),
+  };
+}
+
+// settings 行的原始读取（含明文 Key，仅云函数内部使用）
+async function getSettingsRow(openid) {
+  const rows = await db.collection('user_settings').where({ _openid: openid }).limit(1).get();
+  return rows.data[0] || {};
 }
 
 async function removeWhere(collection, where) {

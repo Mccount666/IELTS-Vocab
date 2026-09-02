@@ -17,18 +17,43 @@
     <view class="between">
       <view>
         <view class="word">{{result.word}}</view>
-        <view class="muted">lemma: {{result.lemma}}</view>
+        <view class="muted" wx:if="{{result.lemma}}">词形：{{result.lemma}}</view>
       </view>
       <button class="secondary-btn collect-btn" bindtap="collectWord">{{result.wordbookEntry ? '已收录' : '收录'}}</button>
     </view>
+
+    <view class="dict-box stack" wx:if="{{dict}}">
+      <view class="between">
+        <view class="muted">{{dict.source || '词典'}}</view>
+        <view class="chip-row">
+          <view class="chip {{dictMode === 'llm' ? 'active' : ''}}" bindtap="aiDefine">AI 释义</view>
+        </view>
+      </view>
+      <view wx:if="{{dict.phonetic}}" class="phonetic">{{dict.phonetic}}</view>
+      <view wx:if="{{dict.translation}}" class="dict-translation">{{dict.translation}}</view>
+      <view wx:if="{{dict.definition}}" class="muted">{{dict.definition}}</view>
+      <view class="stack example-stack" wx:if="{{dict.examples.length}}">
+        <view class="example" wx:for="{{dict.examples}}" wx:key="en" wx:for-item="ex">
+          <view>{{ex.en}}</view>
+          <view class="muted" wx:if="{{ex.zh}}">{{ex.zh}}</view>
+        </view>
+      </view>
+    </view>
+    <view class="muted center" wx:elif="{{dictLoading}}">释义加载中…</view>
+    <button class="secondary-btn" wx:else bindtap="aiDefine">AI 释义</button>
   </view>
 
   <view class="stack" wx:if="{{sentences.length}}">
     <view class="sentence card" wx:for="{{sentences}}" wx:key="_id">
       <view class="sentence-text">{{item.text}}</view>
+      <view class="translation" wx:if="{{translations[item._id] && translations[item._id] !== '…'}}">{{translations[item._id]}}</view>
+      <view class="muted" wx:elif="{{translations[item._id] === '…'}}">翻译中…</view>
       <view class="between muted meta-row">
         <text>位置 {{item.position + 1}}</text>
-        <button class="secondary-btn mini" data-id="{{item._id}}" bindtap="collectSentence">收录例句</button>
+        <view class="row mini-row">
+          <button class="secondary-btn mini" data-id="{{item._id}}" data-text="{{item.text}}" bindtap="translateSentence">翻译</button>
+          <button class="secondary-btn mini" data-id="{{item._id}}" bindtap="collectSentence">收录</button>
+        </view>
       </view>
     </view>
   </view>

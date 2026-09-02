@@ -29,4 +29,7 @@ module.exports = {
   stats: (data) => call('stats.get', data),
   getSettings: () => call('settings.get'),
   saveSettings: (data) => call('settings.save', data),
+  llmDefine: (data) => call('llm.define', data),
+  llmTranslate: (data) => call('llm.translate', data),
+  dictionaryLookup: (data) => call('dictionary.lookup', data),
 };

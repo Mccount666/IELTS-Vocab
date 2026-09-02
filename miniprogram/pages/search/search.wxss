@@ -33,3 +33,49 @@
 .empty {
   text-align: center;
 }
+
+.dict-box {
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: #f1f8f8;
+}
+
+.phonetic {
+  color: #0f766e;
+  font-size: 28rpx;
+  margin-top: 6rpx;
+}
+
+.dict-translation {
+  font-size: 30rpx;
+  line-height: 1.7;
+  color: #1d3038;
+  margin-top: 10rpx;
+}
+
+.example-stack {
+  margin-top: 16rpx;
+}
+
+.example {
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #1d3038;
+}
+
+.translation {
+  margin-top: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #f1f8f8;
+  color: #304b55;
+  font-size: 27rpx;
+  line-height: 1.65;
+}
+
+.mini-row {
+  gap: 12rpx;
+}
