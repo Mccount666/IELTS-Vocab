@@ -1,0 +1,22 @@
+.review-btn {
+  width: 142rpx;
+  font-size: 26rpx;
+}
+
+.word-card {
+  padding: 26rpx;
+}
+
+.delete-btn {
+  width: 128rpx;
+  font-size: 24rpx;
+  line-height: 2.2;
+}
+
+.definition {
+  margin-top: 18rpx;
+}
+
+.empty {
+  text-align: center;
+}

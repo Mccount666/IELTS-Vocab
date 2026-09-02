@@ -1,0 +1,8 @@
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  color: #304b55;
+  font-size: 28rpx;
+  border-bottom: 1rpx solid #edf3f4;
+}

@@ -1,0 +1,57 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/search/search",
+    "pages/import/import",
+    "pages/wordbook/wordbook",
+    "pages/review/review",
+    "pages/stats/stats",
+    "pages/settings/settings"
+  ],
+  "window": {
+    "navigationBarTitleText": "真题词库",
+    "navigationBarBackgroundColor": "#f7fbfb",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7fbfb"
+  },
+  "tabBar": {
+    "color": "#6b7a86",
+    "selectedColor": "#0f766e",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页",
+        "iconPath": "assets/tabbar/home.png",
+        "selectedIconPath": "assets/tabbar/home-active.png"
+      },
+      {
+        "pagePath": "pages/search/search",
+        "text": "查词",
+        "iconPath": "assets/tabbar/search.png",
+        "selectedIconPath": "assets/tabbar/search-active.png"
+      },
+      {
+        "pagePath": "pages/import/import",
+        "text": "导入",
+        "iconPath": "assets/tabbar/import.png",
+        "selectedIconPath": "assets/tabbar/import-active.png"
+      },
+      {
+        "pagePath": "pages/wordbook/wordbook",
+        "text": "生词本",
+        "iconPath": "assets/tabbar/wordbook.png",
+        "selectedIconPath": "assets/tabbar/wordbook-active.png"
+      },
+      {
+        "pagePath": "pages/settings/settings",
+        "text": "我的",
+        "iconPath": "assets/tabbar/settings.png",
+        "selectedIconPath": "assets/tabbar/settings-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

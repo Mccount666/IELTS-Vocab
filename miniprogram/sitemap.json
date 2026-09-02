@@ -1,0 +1,4 @@
+{
+  "desc": "真题词库小程序页面索引",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

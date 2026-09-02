@@ -1,0 +1,22 @@
+{
+  // Cloudflare Workers 配置 —— 真题词库 Web 版
+  // 部署前只需把 database_id 换成 `npx wrangler d1 create ielts_vocab` 返回的真实 ID，
+  // 详见 README.md「部署到 Cloudflare」。
+  "name": "ielts-vocab",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ielts_vocab",
+      "database_id": "9595e28e-a1cf-4c7d-8972-22069fdef30a"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

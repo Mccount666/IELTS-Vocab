@@ -1,0 +1,38 @@
+.review-word {
+  text-align: center;
+  font-size: 64rpx;
+  line-height: 1.2;
+  font-weight: 900;
+  color: #0f3f3c;
+  padding: 42rpx 0 24rpx;
+}
+
+.center {
+  text-align: center;
+}
+
+.cloze {
+  padding: 30rpx;
+  border-radius: 24rpx;
+  background: #eef7f6;
+  color: #1d3038;
+  font-size: 32rpx;
+  line-height: 1.75;
+}
+
+.answer {
+  background: #f8fcfc;
+  box-shadow: none;
+  line-height: 1.7;
+}
+
+.grade-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+}
+
+.empty {
+  margin-top: 120rpx;
+  text-align: center;
+}

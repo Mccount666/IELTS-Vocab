@@ -1,0 +1,45 @@
+{
+  "name": "ielts-vocab-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "真题词库桌面版 —— Electron 壳，加载云端站点，登录态与缓存本地持久化",
+  "main": "main.js",
+  "scripts": {
+    "icon": "node gen-icon.js",
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.mccou.ieltsvocab",
+    "productName": "真题词库",
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "config.json",
+      "icon.png"
+    ],
+    "win": {
+      "icon": "icon.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "真题词库",
+      "artifactName": "IELTS-Vocab-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "IELTS-Vocab-Portable-${version}.${ext}"
+    }
+  }
+}

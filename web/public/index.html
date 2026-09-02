@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>真题词库 · 你做过的真题，就是你最好的词典</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237B61FF'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='Georgia'%3E词%3C/text%3E%3C/svg%3E">
+  <meta name="theme-color" content="#7b61ff">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <script>
+    // 主题先于 CSS 应用，避免暗色用户首屏闪白（localStorage: auto/light/dark）
+    (function () {
+      try {
+        var mode = localStorage.getItem("iv_theme") || "auto";
+        var dark = mode === "dark" || (mode === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">词</span>
+        <span class="brand-text">真题词库</span>
+      </a>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="search">
+          <svg viewBox="0 0 24 24" class="tab-icon"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+          查词
+        </button>
+        <button class="tab" data-tab="import">
+          <svg viewBox="0 0 24 24" class="tab-icon"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+          导入
+        </button>
+        <button class="tab" data-tab="wordbook">
+          <svg viewBox="0 0 24 24" class="tab-icon"><path d="M17.63 5.84A2 2 0 0 0 16 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 1.63-.84L22 12l-4.37-6.16z"/></svg>
+          生词本<span class="tab-badge" id="tab-wb-badge" hidden></span>
+        </button>
+        <button class="tab" data-tab="settings">
+          <svg viewBox="0 0 24 24" class="tab-icon"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.03 7.03 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.63 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.14.24.42.34.61.22l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.23.09.47 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg>
+          设置
+        </button>
+      </nav>
+      <button class="icon-btn theme-toggle" id="theme-toggle" title="主题：跟随系统">
+        <svg viewBox="0 0 24 24"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-14.5a.9.9 0 0 1-.9-.9V1a.9.9 0 1 1 1.8 0v1.6a.9.9 0 0 1-.9.9zm0 21a.9.9 0 0 1-.9-.9V22a.9.9 0 1 1 1.8 0v1.6a.9.9 0 0 1-.9.9zM20.5 12a.9.9 0 0 1 .9-.9H23a.9.9 0 1 1 0 1.8h-1.6a.9.9 0 0 1-.9-.9zM1 12a.9.9 0 0 1 .9-.9h1.6a.9.9 0 1 1 0 1.8H1.9A.9.9 0 0 1 1 12zm16.16 5.16a.9.9 0 0 1 1.27 0l1.13 1.13a.9.9 0 1 1-1.27 1.27l-1.13-1.13a.9.9 0 0 1 0-1.27zM4.44 4.44a.9.9 0 0 1 1.27 0l1.13 1.13a.9.9 0 1 1-1.27 1.27L4.44 5.71a.9.9 0 0 1 0-1.27zm13.99 1.13 1.13-1.13a.9.9 0 1 1 1.27 1.27l-1.13 1.13a.9.9 0 1 1-1.27-1.27zM4.44 19.56l1.13-1.13a.9.9 0 0 1 1.27 1.27l-1.13 1.13a.9.9 0 1 1-1.27-1.27z"/></svg>
+      </button>
+      <div class="user-chip" id="user-chip" hidden>
+        <span class="user-avatar" id="user-avatar"></span>
+        <span class="user-name" id="user-name"></span>
+        <button class="link-btn" id="logout-btn">退出</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- ================= 登录 / 注册（未登录时独占全屏） ================= -->
+    <section id="view-auth" class="view view-auth">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <span class="brand-mark">词</span>
+          <h1>真题词库</h1>
+        </div>
+        <p class="auth-tagline">你做过的真题，就是你最好的词典</p>
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-auth="login">登录</button>
+          <button type="button" class="auth-tab" data-auth="register">注册</button>
+        </div>
+        <form id="auth-form" class="auth-form">
+          <label class="field">
+            <span class="field-label">用户名</span>
+            <input id="auth-username" autocomplete="username" placeholder="3-24 位字母、数字、_ 或 -">
+          </label>
+          <label class="field">
+            <span class="field-label">密码</span>
+            <input id="auth-password" type="password" autocomplete="current-password" placeholder="至少 6 位">
+          </label>
+          <label class="field" id="auth-reg-code-field" hidden>
+            <span class="field-label">注册码</span>
+            <input id="auth-reg-code" autocomplete="off" placeholder="站长开启了注册码时必填">
+          </label>
+          <p class="auth-error" id="auth-error" hidden></p>
+          <button type="submit" class="btn btn-primary btn-block" id="auth-submit">登录</button>
+        </form>
+        <p class="auth-note">注册即拥有独立词库：例句来自你自己导入的真题，LLM / MinerU Key 由每位用户各自配置、互不可见。</p>
+      </div>
+    </section>
+    <!-- ================= 查词 ================= -->
+    <section id="view-search" class="view active">
+      <div class="search-hero">
+        <div class="search-bar" id="search-bar">
+          <svg viewBox="0 0 24 24" class="search-icon"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+          <input id="search-input" type="text" placeholder="输入单词或短语，例如 abandon / look forward to" autocomplete="off" spellcheck="false">
+          <button id="search-btn" class="btn btn-primary">查询</button>
+          <div class="search-suggest" id="suggest-box" hidden></div>
+        </div>
+        <div class="filter-chips" id="exam-chips"></div>
+      </div>
+      <div id="search-results" class="results"></div>
+    </section>
+
+    <!-- ================= 导入 ================= -->
+    <section id="view-import" class="view">
+      <div class="upload-card" id="drop-zone">
+        <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.md" hidden>
+        <svg viewBox="0 0 24 24" class="upload-icon"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+        <p class="upload-title">拖拽真题文件到这里，或</p>
+        <button class="btn btn-primary" id="pick-btn">选择文件</button>
+        <p class="upload-hint">支持 PDF / DOCX / TXT / Markdown，可一次选多个</p>
+      </div>
+
+      <div class="import-options">
+        <div class="option-group">
+          <label class="option-label" for="exam-type">考试类型</label>
+          <select id="exam-type" class="select">
+            <option>IELTS</option>
+            <option>CET-4</option>
+            <option>CET-6</option>
+            <option>TOEFL</option>
+            <option>GRE</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <label class="option-switch" id="ocr-switch-row">
+          <input type="checkbox" id="ocr-toggle">
+          <span class="switch-ui" aria-hidden="true"></span>
+          <span>扫描版 PDF 自动用 MinerU OCR</span>
+        </label>
+        <span class="option-hint" id="ocr-hint">未配置 MinerU Token，可在「设置」页配置</span>
+      </div>
+
+      <div id="import-queue" class="import-queue"></div>
+
+      <div class="paste-card" id="paste-card">
+        <button class="link-btn paste-toggle" id="paste-toggle">
+          <svg viewBox="0 0 24 24"><path d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+          没有文件？粘贴文本导入
+        </button>
+        <div class="paste-form" id="paste-form" hidden>
+          <label class="field" id="paste-title-field">
+            <span class="field-label">标题（存入文档列表的名字）</span>
+            <input type="text" id="paste-title" placeholder="留空则自动命名为「粘贴文本 + 日期」" autocomplete="off">
+          </label>
+          <label class="field" id="paste-target-field" hidden>
+            <span class="field-label">追加到已有文档（句子接在该文档后面，不新建）</span>
+            <select id="paste-target" class="select"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">正文</span>
+            <textarea id="paste-text" rows="8" placeholder="把真题原文粘进来，支持中英混排，会自动分句建索引…"></textarea>
+          </label>
+          <div class="paste-foot">
+            <span class="muted" id="paste-stats"></span>
+            <button class="btn btn-primary" id="paste-import">导入文本</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h2>已导入文档</h2>
+        <span class="muted" id="doc-count"></span>
+      </div>
+      <div id="doc-list" class="doc-list"></div>
+    </section>
+
+    <!-- ================= 生词本 ================= -->
+    <section id="view-wordbook" class="view">
+      <div class="section-head">
+        <h2>生词本</h2>
+        <div class="section-actions">
+          <select id="review-scope" class="select select-sm" title="选择复习范围">
+            <option value="all">复习：全部</option>
+            <option value="due">复习：到期词</option>
+            <option value="weak">复习：生疏词</option>
+          </select>
+          <select id="review-mode" class="select select-sm" title="选择复习模式">
+            <option value="word">模式：看词回忆</option>
+            <option value="cloze">模式：例句填空</option>
+          </select>
+          <button class="btn btn-ghost" id="review-btn">开始复习</button>
+          <button class="btn btn-ghost" id="export-csv">导出 CSV</button>
+          <button class="btn btn-ghost" id="export-anki">导出 Anki</button>
+        </div>
+      </div>
+      <div class="study-stats" id="study-stats" hidden>
+        <div class="ss-tiles">
+          <div class="ss-tile ss-streak"><b id="ss-streak">0</b><span>连续打卡（天）</span></div>
+          <div class="ss-tile ss-due"><b id="ss-due">0</b><span>今日待复习</span></div>
+          <div class="ss-tile"><b id="ss-today">0</b><span>今日已复习</span></div>
+          <div class="ss-tile"><b id="ss-total">0</b><span>累计复习（次）</span></div>
+        </div>
+        <div class="ss-chart" id="ss-chart" title="最近 15 周每日复习量"></div>
+        <div class="ss-chart-caption"><span>15 周前</span><span>今天</span></div>
+      </div>
+      <div class="wb-stats" id="wb-stats" hidden></div>
+      <div class="wb-toolbar" id="wb-toolbar" hidden>
+        <div class="wb-chips" id="wb-fam-chips"></div>
+        <div class="wb-toolbar-right">
+          <select id="wb-sort" class="select select-sm" title="排序方式">
+            <option value="added">按收录时间</option>
+            <option value="familiarity">按熟悉度</option>
+            <option value="alpha">按字母 A-Z</option>
+          </select>
+          <input type="text" id="wb-filter" class="wb-filter" placeholder="筛选生词、释义或来源文件…" autocomplete="off">
+          <button class="btn btn-ghost" id="wb-batch-toggle" title="批量删除或调整熟悉度">批量管理</button>
+        </div>
+      </div>
+      <div id="wordbook-grid" class="wordbook-grid"></div>
+      <div class="wb-batch-bar" id="wb-batch-bar" hidden>
+        <label class="batch-all"><input type="checkbox" id="wb-batch-all"> 全选</label>
+        <span class="batch-count" id="wb-batch-count">已选 0</span>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" data-bfam="0">设为生疏</button>
+        <button class="btn btn-ghost btn-sm" data-bfam="3">设为一般</button>
+        <button class="btn btn-ghost btn-sm" data-bfam="5">设为熟练</button>
+        <button class="btn btn-danger btn-sm" id="wb-batch-del">删除所选</button>
+        <button class="btn btn-ghost btn-sm" id="wb-batch-exit">完成</button>
+      </div>
+    </section>
+
+    <!-- ================= 设置 ================= -->
+    <section id="view-settings" class="view">
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h2>LLM 词典增强 <span class="tag tag-optional">可选</span></h2>
+          <p>配置任意 OpenAI 兼容接口（OpenAI / DeepSeek / Kimi / 中转均可）。用于中文释义、AI 词典条目与例句翻译。Key 只保存在你的 D1 数据库里，不经过第三方。</p>
+        </div>
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">API Base URL</span>
+            <input type="text" id="llm-base-url" placeholder="https://api.openai.com/v1" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field-label">API Key</span>
+            <input type="password" id="llm-api-key" placeholder="留空则保持不变；输入新值即覆盖" autocomplete="new-password">
+          </label>
+          <label class="field">
+            <span class="field-label">模型</span>
+            <input type="text" id="llm-model" placeholder="gpt-4o-mini / deepseek-chat …" autocomplete="off">
+          </label>
+        </div>
+        <div class="settings-card-foot">
+          <span class="field-status" id="llm-status"></span>
+          <button class="btn btn-ghost" id="llm-test">测试连接</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h2>MinerU OCR <span class="tag tag-optional">可选</span></h2>
+          <p>用于扫描版 PDF 真题的文字识别。到 <a href="https://mineru.net" target="_blank" rel="noopener">mineru.net</a> 注册后在「API 申请」获取 Token。</p>
+        </div>
+        <div class="form-grid">
+          <label class="field field-wide">
+            <span class="field-label">API Token</span>
+            <input type="password" id="mineru-token" placeholder="留空则保持不变；输入新值即覆盖" autocomplete="new-password">
+          </label>
+        </div>
+        <div class="settings-card-foot">
+          <span class="field-status" id="mineru-status"></span>
+        </div>
+      </div>
+
+      <div class="settings-card" id="admin-card" hidden>
+        <div class="settings-card-head">
+          <h2>站点管理 <span class="tag tag-optional">仅站长可见</span></h2>
+          <p>注册码开启后，新用户注册必须填写，防止陌生人滥用共享的免费额度；清除后任何人可注册。这是全站唯一的站长级设置。</p>
+        </div>
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">注册码</span>
+            <input type="text" id="reg-code" placeholder="留空保持不变；输入 - 清除注册码" autocomplete="off">
+          </label>
+        </div>
+        <div class="settings-card-foot">
+          <span class="field-status" id="admin-users"></span>
+          <span class="field-status" id="reg-status"></span>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <h2>数据</h2>
+          <p>备份包含你自己的文档、生词本与设置，JSON 格式全量导出；恢复时合并进现有数据（不删除已有内容）。每个账号的数据互相隔离。</p>
+        </div>
+        <div class="settings-card-foot">
+          <span class="field-status" id="restore-status"></span>
+          <div class="section-actions">
+            <input type="file" id="restore-input" accept=".json,application/json" hidden>
+            <button class="btn btn-ghost" id="restore-backup">从备份恢复</button>
+            <button class="btn btn-ghost" id="export-backup">下载全量备份</button>
+            <button class="btn btn-primary" id="save-settings">保存设置</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 复习模式：全屏闪卡浮层 -->
+  <div id="review-overlay" class="review-overlay" hidden>
+    <div class="review-top">
+      <span class="review-progress" id="review-progress"></span>
+      <div class="review-bar"><div id="review-bar-fill"></div></div>
+      <button class="link-btn" id="review-exit">结束复习 (Esc)</button>
+    </div>
+    <div class="review-stage">
+      <div class="review-card" id="review-card">
+        <div class="review-word-row" id="review-word-row">
+          <span class="review-word" id="review-word"></span>
+          <button class="icon-btn" id="review-speak" title="朗读 (R)">
+            <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          </button>
+        </div>
+        <div class="review-cloze" id="review-cloze" hidden></div>
+        <div class="review-hint" id="review-hint">回想释义，然后按空格或点击卡片显示答案</div>
+        <button class="link-btn review-hint-btn" id="review-cloze-hint" hidden>想不起来？给我提示</button>
+        <div class="review-answer" id="review-answer" hidden>
+          <div class="review-phonetic" id="review-phonetic"></div>
+          <div class="review-translation" id="review-translation"></div>
+          <div class="review-definition" id="review-definition"></div>
+          <div class="review-sentence" id="review-sentence" hidden></div>
+        </div>
+      </div>
+      <div class="review-grade" id="review-grade" hidden>
+        <button class="grade-btn grade-forget" data-grade="forget">忘记 <kbd>1</kbd></button>
+        <button class="grade-btn grade-fuzzy" data-grade="fuzzy">模糊 <kbd>2</kbd></button>
+        <button class="grade-btn grade-know" data-grade="know">认识 <kbd>3</kbd></button>
+      </div>
+      <div class="review-summary" id="review-summary" hidden>
+        <div class="review-summary-title">本轮复习完成 🎉</div>
+        <div class="review-summary-stats" id="review-summary-stats"></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" id="review-again">再来一轮</button>
+          <button class="btn btn-ghost" id="review-close">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

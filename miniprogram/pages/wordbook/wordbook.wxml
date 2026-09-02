@@ -1,0 +1,37 @@
+<view class="container stack">
+  <view class="card stack">
+    <view class="between">
+      <view>
+        <view class="section-title">生词本</view>
+        <view class="muted">{{words.length}} 个生词 · {{dueCount}} 个今日到期</view>
+      </view>
+      <button class="primary-btn review-btn" bindtap="goReview">复习</button>
+    </view>
+
+    <view class="chip-row">
+      <view class="chip {{filter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="setFilter">全部</view>
+      <view class="chip {{filter === 'weak' ? 'active' : ''}}" data-filter="weak" bindtap="setFilter">生疏</view>
+      <view class="chip {{filter === 'normal' ? 'active' : ''}}" data-filter="normal" bindtap="setFilter">一般</view>
+      <view class="chip {{filter === 'known' ? 'active' : ''}}" data-filter="known" bindtap="setFilter">熟练</view>
+      <view class="chip {{filter === 'due' ? 'active' : ''}}" data-filter="due" bindtap="setFilter">到期</view>
+    </view>
+  </view>
+
+  <view class="stack" wx:if="{{visibleWords.length}}">
+    <view class="word-card card" wx:for="{{visibleWords}}" wx:key="_id">
+      <view class="between">
+        <view>
+          <view class="word">{{item.word}}</view>
+          <view class="muted">{{item.familiarityLabel}} · 下次 {{item.nextDate}}</view>
+        </view>
+        <button class="danger-btn delete-btn" data-id="{{item._id}}" bindtap="deleteWord">删除</button>
+      </view>
+      <view class="muted definition" wx:if="{{item.definition || item.translation}}">{{item.translation || item.definition}}</view>
+    </view>
+  </view>
+
+  <view class="card empty" wx:else>
+    <view class="section-title">还没有生词</view>
+    <view class="muted">在查词页把单词或例句收录进来，就可以开始复习。</view>
+  </view>
+</view>

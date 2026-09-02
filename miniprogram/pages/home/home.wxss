@@ -1,0 +1,63 @@
+.hero {
+  background: linear-gradient(145deg, #effffd, #ffffff 58%, #e9f7ff);
+}
+
+.hero-kicker {
+  color: #0f766e;
+  font-size: 22rpx;
+  letter-spacing: 4rpx;
+  font-weight: 800;
+}
+
+.hero-title {
+  margin-top: 14rpx;
+  font-size: 54rpx;
+  line-height: 1.15;
+  font-weight: 900;
+  color: #0f3f3c;
+}
+
+.hero-desc {
+  margin-top: 18rpx;
+  color: #526773;
+  font-size: 29rpx;
+  line-height: 1.7;
+}
+
+.hero-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18rpx;
+  margin-top: 30rpx;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18rpx;
+}
+
+.stat {
+  text-align: center;
+  padding: 24rpx 12rpx;
+}
+
+.stat-value {
+  font-size: 42rpx;
+  font-weight: 900;
+  color: #0f766e;
+}
+
+.stat-label {
+  margin-top: 6rpx;
+  color: #6b7a86;
+  font-size: 23rpx;
+}
+
+.step {
+  padding: 22rpx 24rpx;
+  border-radius: 20rpx;
+  background: #f1f8f8;
+  color: #304b55;
+  font-size: 28rpx;
+}

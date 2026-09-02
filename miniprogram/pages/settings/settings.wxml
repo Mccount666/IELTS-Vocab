@@ -1,0 +1,33 @@
+<view class="container stack">
+  <view class="card stack">
+    <view>
+      <view class="section-title">我的</view>
+      <view class="muted">微信小程序使用 OPENID 自动识别用户，不需要额外注册登录。</view>
+    </view>
+    <view class="info-row">
+      <text>身份</text>
+      <text>{{user.isAdmin ? '站长' : '普通用户'}}</text>
+    </view>
+    <button class="secondary-btn" bindtap="goStats">查看学习统计</button>
+  </view>
+
+  <view class="card stack">
+    <view>
+      <view class="section-title">集成设置</view>
+      <view class="muted">Key 保存在 CloudBase 云数据库中，只由云函数读取。</view>
+    </view>
+
+    <input class="input" placeholder="LLM Base URL，可留空" value="{{form.llmBaseUrl}}" bindinput="onInput" data-field="llmBaseUrl" />
+    <input class="input" placeholder="LLM Model，可留空" value="{{form.llmModel}}" bindinput="onInput" data-field="llmModel" />
+    <input class="input" password placeholder="LLM API Key，留空则不修改" value="{{form.llmApiKey}}" bindinput="onInput" data-field="llmApiKey" />
+    <input class="input" password placeholder="MinerU Token，留空则不修改" value="{{form.mineruApiToken}}" bindinput="onInput" data-field="mineruApiToken" />
+
+    <view class="muted">LLM Key：{{settings.llmKeySet ? '已设置' : '未设置'}} · MinerU：{{settings.mineruTokenSet ? '已设置' : '未设置'}}</view>
+    <button class="primary-btn" loading="{{saving}}" bindtap="save">保存设置</button>
+  </view>
+
+  <view class="card stack">
+    <view class="section-title">当前状态</view>
+    <view class="muted">第一版小程序已实现粘贴文本导入、查词、生词本、复习和统计。PDF/DOCX/OCR 会放到第二阶段。</view>
+  </view>
+</view>

@@ -1,0 +1,31 @@
+<view class="container stack">
+  <view class="card stack" wx:if="{{current}}">
+    <view class="between muted">
+      <text>{{index + 1}} / {{queue.length}}</text>
+      <text>{{mode === 'cloze' ? '例句填空' : '看词回忆'}}</text>
+    </view>
+
+    <view class="review-word">{{current.word}}</view>
+    <view class="cloze" wx:if="{{mode === 'cloze' && current.sentenceText}}">{{showAnswer ? current.sentenceText : current.clozeText}}</view>
+    <view class="muted center" wx:else>先回想释义和真题语境，再点击显示答案。</view>
+
+    <view class="answer card" wx:if="{{showAnswer}}">
+      <view class="muted">熟悉度 {{current.familiarity || 0}} / 5</view>
+      <view wx:if="{{current.translation || current.definition}}">{{current.translation || current.definition}}</view>
+      <view class="muted" wx:if="{{current.sentenceText}}">{{current.sentenceText}}</view>
+    </view>
+
+    <button class="secondary-btn" wx:if="{{!showAnswer}}" bindtap="flip">显示答案</button>
+    <view class="grade-row" wx:else>
+      <button class="danger-btn" data-grade="forgot" bindtap="grade">忘记</button>
+      <button class="secondary-btn" data-grade="hard" bindtap="grade">模糊</button>
+      <button class="primary-btn" data-grade="know" bindtap="grade">认识</button>
+    </view>
+  </view>
+
+  <view class="card empty" wx:else>
+    <view class="section-title">{{finished ? '本轮完成' : '没有到期生词'}}</view>
+    <view class="muted">{{finished ? '可以回到生词本查看新的复习时间。' : '新增生词会默认进入今日复习。'}}</view>
+    <button class="primary-btn" bindtap="reload">重新加载</button>
+  </view>
+</view>

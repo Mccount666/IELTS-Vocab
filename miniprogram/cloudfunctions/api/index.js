@@ -1,0 +1,425 @@
+const cloud = require('wx-server-sdk');
+
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+
+const db = cloud.database();
+const _ = db.command;
+
+const COLLECTIONS = [
+  'users',
+  'documents',
+  'sentences',
+  'word_index',
+  'wordbook',
+  'review_log',
+  'user_settings',
+  'site_settings',
+  'dictionary_cache',
+];
+
+const WORD_RE = /[a-zA-Z]+(?:'[a-z]+)?/g;
+const SRS_INTERVALS = [1, 2, 4, 8, 16, 32];
+
+exports.main = async (event) => {
+  try {
+    const wxContext = cloud.getWXContext();
+    const openid = wxContext.OPENID;
+    if (!openid) return fail('无法获取微信用户身份', 401);
+
+    const action = event.action || event.route || event.op;
+    const data = event.data || {};
+    await ensureUser(openid);
+
+    const routes = {
+      'me.initUser': () => initUser(openid),
+      'documents.create': () => createDocument(openid, data),
+      'documents.list': () => listDocuments(openid),
+      'documents.delete': () => deleteDocument(openid, data),
+      'documents.appendSentences': () => appendSentences(openid, data),
+      'sentences.get': () => getSentence(openid, data),
+      'search.query': () => search(openid, data),
+      'search.suggest': () => suggest(openid, data),
+      'search.context': () => context(openid, data),
+      'wordbook.list': () => listWordbook(openid, data),
+      'wordbook.add': () => addWordbook(openid, data),
+      'wordbook.delete': () => deleteWordbook(openid, data),
+      'wordbook.review': () => reviewWordbook(openid, data),
+      'wordbook.batch': () => batchWordbook(openid, data),
+      'stats.get': () => stats(openid, data),
+      'settings.get': () => getSettings(openid),
+      'settings.save': () => saveSettings(openid, data),
+    };
+
+    if (!routes[action]) return fail(`未知操作：${action}`, 404);
+    const result = await routes[action]();
+    return ok(result);
+  } catch (err) {
+    console.error(err);
+    return fail(err.message || '服务器内部错误', err.statusCode || 500);
+  }
+};
+
+function ok(data = {}) {
+  return { ok: true, data };
+}
+
+function fail(error, statusCode = 400) {
+  return { ok: false, error, statusCode };
+}
+
+function nowIso() {
+  return new Date().toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function pad(n) {
+  return String(n).padStart(2, '0');
+}
+
+function localDateString(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function addDaysAtNoon(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(12, 0, 0, 0);
+  return `${localDateString(date)} 12:00:00`;
+}
+
+function lemmatize(word) {
+  word = String(word || '').toLowerCase();
+  if (word.endsWith("'s")) word = word.slice(0, -2);
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.length > 3 && word.endsWith('es')) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  if (word.length > 5 && word.endsWith('ing')) return word.slice(0, -3);
+  if (word.length > 4 && word.endsWith('ed')) return word.length > 5 ? word.slice(0, -2) : word;
+  return word;
+}
+
+function tokenizeWords(text) {
+  return (String(text || '').match(WORD_RE) || []).map((w) => w.toLowerCase());
+}
+
+function requireText(value, field) {
+  const text = String(value || '').trim();
+  if (!text) throw Object.assign(new Error(`缺少 ${field}`), { statusCode: 400 });
+  return text;
+}
+
+function normalizeFamiliarity(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(5, Math.round(n)));
+}
+
+function gradeReview(currentFamiliarity, grade) {
+  const current = normalizeFamiliarity(currentFamiliarity);
+  let next = current;
+  let gradedAs = grade;
+  if (grade === 'forgot') next = Math.max(0, current - 1);
+  else if (grade === 'hard') next = current;
+  else if (grade === 'know') next = Math.min(5, current + 1);
+  else gradedAs = 'hard';
+  const interval = gradedAs === 'know' ? SRS_INTERVALS[next] || 32 : 1;
+  return {
+    familiarity: next,
+    gradedAs,
+    reviewDate: localDateString(),
+    reviewedAt: nowIso(),
+    nextReviewAt: addDaysAtNoon(interval),
+  };
+}
+
+async function getSiteSetting(key) {
+  const row = await db.collection('site_settings').where({ key }).limit(1).get();
+  return row.data.length ? row.data[0].value : '';
+}
+
+async function setSiteSetting(key, value) {
+  const existing = await db.collection('site_settings').where({ key }).limit(1).get();
+  if (existing.data.length) {
+    await db.collection('site_settings').doc(existing.data[0]._id).update({ data: { value } });
+  } else {
+    await db.collection('site_settings').add({ data: { key, value } });
+  }
+}
+
+async function ensureUser(openid) {
+  const found = await db.collection('users').where({ _openid: openid }).limit(1).get();
+  let adminOpenid = await getSiteSetting('adminOpenid');
+  // 管理员固定制：第一个进入的用户身份永久钉进 site_settings.adminOpenid，
+  // 之后管理员只认这个微信号（users 集合被清空也不会转移），其余人全是普通用户
+  if (!adminOpenid && (await db.collection('users').count()).total === 0) {
+    adminOpenid = openid;
+    await setSiteSetting('adminOpenid', openid);
+  }
+  const isAdmin = adminOpenid === openid;
+  if (found.data.length) {
+    if (Boolean(found.data[0].isAdmin) !== isAdmin) {
+      await db.collection('users').doc(found.data[0]._id).update({ data: { isAdmin } });
+      found.data[0].isAdmin = isAdmin;
+    }
+    return found.data[0];
+  }
+  const doc = { _openid: openid, isAdmin, createdAt: nowIso() };
+  const added = await db.collection('users').add({ data: doc });
+  return { _id: added._id, ...doc };
+}
+
+async function initUser(openid) {
+  const user = await ensureUser(openid);
+  return { user: { openid, isAdmin: Boolean(user.isAdmin) }, collections: COLLECTIONS };
+}
+
+async function createDocument(openid, data) {
+  const filename = requireText(data.filename, 'filename').slice(0, 255);
+  const examType = String(data.examType || data.exam_type || 'Other').trim().slice(0, 32) || 'Other';
+  const added = await db.collection('documents').add({
+    data: { _openid: openid, filename, examType, importedAt: nowIso(), sentenceCount: 0 },
+  });
+  return { id: added._id, sentenceCount: 0 };
+}
+
+async function listDocuments(openid) {
+  const res = await db.collection('documents').where({ _openid: openid }).orderBy('importedAt', 'desc').limit(100).get();
+  return { documents: res.data };
+}
+
+async function deleteDocument(openid, data) {
+  const documentId = requireText(data.documentId || data.id, 'documentId');
+  const doc = await db.collection('documents').doc(documentId).get().catch(() => null);
+  if (!doc || !doc.data || doc.data._openid !== openid) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
+  await db.collection('documents').doc(documentId).remove();
+  await removeWhere('sentences', { _openid: openid, documentId });
+  await removeWhere('word_index', { _openid: openid, documentId });
+  return { ok: true };
+}
+
+function chunks(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function appendSentences(openid, data) {
+  const documentId = requireText(data.documentId || data.id, 'documentId');
+  const doc = await db.collection('documents').doc(documentId).get().catch(() => null);
+  if (!doc || !doc.data || doc.data._openid !== openid) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
+  const items = Array.isArray(data.sentences) ? data.sentences.slice(0, 500) : [];
+
+  // 预处理：句子文档与索引 token 一次算好，避免上千次串行写库超时
+  const prepared = [];
+  let cursor = Number(doc.data.sentenceCount) || 0;
+  for (const item of items) {
+    const text = String(item.text || '').trim();
+    if (!text) continue;
+    const position = Number.isFinite(Number(item.position)) ? Number(item.position) : cursor;
+    cursor = Math.max(cursor, position + 1);
+    const tokens = Array.isArray(item.tokens) ? item.tokens : tokenizeWords(text);
+    const unique = Array.from(new Set(tokens.map((w) => String(w || '').toLowerCase()).filter((w) => w.length >= 2)));
+    prepared.push({ doc: { _openid: openid, documentId, text, position }, tokens: unique });
+  }
+  if (!prepared.length) return { inserted: 0, ids: [] };
+
+  // 批量写句子，拿回与输入同序的 ids
+  const ids = [];
+  for (const part of chunks(prepared.map((p) => p.doc), 100)) {
+    const res = await db.collection('sentences').add({ data: part });
+    ids.push(...(res.ids || []));
+  }
+
+  // 批量写倒排索引
+  const indexDocs = [];
+  prepared.forEach((p, i) => {
+    const sentenceId = ids[i];
+    if (!sentenceId) return;
+    for (const word of p.tokens) {
+      indexDocs.push({ _openid: openid, word, lemma: lemmatize(word), sentenceId, documentId, examType: doc.data.examType || 'Other' });
+    }
+  });
+  for (const part of chunks(indexDocs, 500)) {
+    await db.collection('word_index').add({ data: part });
+  }
+
+  await db.collection('documents').doc(documentId).update({ data: { sentenceCount: _.inc(prepared.length) } });
+  return { inserted: prepared.length, ids };
+}
+
+async function getSentence(openid, data) {
+  const id = requireText(data.id, 'id');
+  const row = await db.collection('sentences').doc(id).get().catch(() => null);
+  if (!row || !row.data || row.data._openid !== openid) throw Object.assign(new Error('句子不存在或不属于你'), { statusCode: 404 });
+  return { sentence: row.data };
+}
+
+async function search(openid, data) {
+  const query = requireText(data.word, 'word').toLowerCase().slice(0, 80);
+  const lemma = lemmatize(query);
+  const examType = String(data.examType || data.exam_type || '').trim();
+  const values = Array.from(new Set([query, lemma]));
+  const where = { _openid: openid, word: _.in(values) };
+  if (examType && examType !== 'All') where.examType = examType;
+  let index = await db.collection('word_index').where(where).limit(200).get();
+  if (!index.data.length && lemma !== query) {
+    const fallback = { _openid: openid, lemma };
+    if (examType && examType !== 'All') fallback.examType = examType;
+    index = await db.collection('word_index').where(fallback).limit(200).get();
+  }
+  const sentenceIds = Array.from(new Set(index.data.map((x) => x.sentenceId))).slice(0, 100);
+  const sentences = [];
+  for (const sentenceId of sentenceIds) {
+    const row = await db.collection('sentences').doc(sentenceId).get().catch(() => null);
+    if (row && row.data && row.data._openid === openid) sentences.push(row.data);
+  }
+  const wb = await db.collection('wordbook').where({ _openid: openid, word: query }).limit(1).get();
+  return { word: query, lemma, sentences, wordbookEntry: wb.data[0] || null };
+}
+
+async function suggest(openid, data) {
+  const prefix = requireText(data.prefix, 'prefix').toLowerCase().slice(0, 40);
+  const examType = String(data.examType || data.exam_type || '').trim();
+  const where = { _openid: openid };
+  if (examType && examType !== 'All') where.examType = examType;
+  const rows = await db.collection('word_index').where(where).limit(500).get();
+  const counts = new Map();
+  for (const row of rows.data) {
+    if (!row.word || (!row.word.startsWith(prefix) && !(row.lemma || '').startsWith(prefix))) continue;
+    counts.set(row.word, (counts.get(row.word) || 0) + 1);
+  }
+  const suggestions = Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8)
+    .map(([word, count]) => ({ word, count }));
+  return { suggestions };
+}
+
+async function context(openid, data) {
+  const documentId = requireText(data.documentId, 'documentId');
+  const position = Number(data.position) || 0;
+  const span = Math.max(1, Math.min(3, Number(data.span) || 2));
+  const rows = await db.collection('sentences')
+    .where({ _openid: openid, documentId, position: _.gte(position - span).and(_.lte(position + span)) })
+    .orderBy('position', 'asc')
+    .limit(span * 2 + 1)
+    .get();
+  return { sentences: rows.data };
+}
+
+async function listWordbook(openid) {
+  const rows = await db.collection('wordbook').where({ _openid: openid }).orderBy('addedAt', 'desc').limit(500).get();
+  const today = localDateString();
+  return {
+    words: rows.data,
+    dueCount: rows.data.filter((x) => !x.nextReviewAt || String(x.nextReviewAt).slice(0, 10) <= today).length,
+  };
+}
+
+async function addWordbook(openid, data) {
+  const word = requireText(data.word, 'word').toLowerCase().slice(0, 80);
+  const existing = await db.collection('wordbook').where({ _openid: openid, word }).limit(1).get();
+  const payload = {
+    phonetic: String(data.phonetic || ''),
+    translation: String(data.translation || ''),
+    definition: String(data.definition || ''),
+    sentenceId: data.sentenceId || '',
+  };
+  if (existing.data.length) {
+    await db.collection('wordbook').doc(existing.data[0]._id).update({ data: payload });
+    return { id: existing.data[0]._id, updated: true };
+  }
+  const added = await db.collection('wordbook').add({
+    data: { _openid: openid, word, ...payload, addedAt: nowIso(), familiarity: 0, lastReviewedAt: '', nextReviewAt: '' },
+  });
+  return { id: added._id, updated: false };
+}
+
+async function deleteWordbook(openid, data) {
+  const id = requireText(data.id, 'id');
+  const row = await db.collection('wordbook').doc(id).get().catch(() => null);
+  if (!row || !row.data || row.data._openid !== openid) throw Object.assign(new Error('生词不存在或不属于你'), { statusCode: 404 });
+  await db.collection('wordbook').doc(id).remove();
+  return { ok: true };
+}
+
+async function reviewWordbook(openid, data) {
+  const id = requireText(data.id, 'id');
+  const row = await db.collection('wordbook').doc(id).get().catch(() => null);
+  if (!row || !row.data || row.data._openid !== openid) throw Object.assign(new Error('生词不存在或不属于你'), { statusCode: 404 });
+  const graded = gradeReview(row.data.familiarity, data.grade);
+  await db.collection('wordbook').doc(id).update({
+    data: { familiarity: graded.familiarity, lastReviewedAt: graded.reviewedAt, nextReviewAt: graded.nextReviewAt },
+  });
+  await db.collection('review_log').add({
+    data: { _openid: openid, wordbookId: id, word: row.data.word, gradedAs: graded.gradedAs, familiarity: graded.familiarity, reviewDate: graded.reviewDate, reviewedAt: graded.reviewedAt },
+  });
+  return graded;
+}
+
+async function batchWordbook(openid, data) {
+  const ids = Array.isArray(data.ids) ? data.ids.slice(0, 200).map(String) : [];
+  if (!ids.length) return { changed: 0 };
+  let changed = 0;
+  for (const id of ids) {
+    const row = await db.collection('wordbook').doc(id).get().catch(() => null);
+    if (!row || !row.data || row.data._openid !== openid) continue;
+    if (data.type === 'delete') await db.collection('wordbook').doc(id).remove();
+    if (data.type === 'familiarity') await db.collection('wordbook').doc(id).update({ data: { familiarity: normalizeFamiliarity(data.familiarity) } });
+    changed += 1;
+  }
+  return { changed };
+}
+
+async function stats(openid, data) {
+  const since = String(data.since || '').slice(0, 10) || localDateString();
+  const logs = await db.collection('review_log').where({ _openid: openid, reviewDate: _.gte(since) }).limit(1000).get();
+  const dailyMap = new Map();
+  for (const log of logs.data) dailyMap.set(log.reviewDate, (dailyMap.get(log.reviewDate) || 0) + 1);
+  const daily = Array.from(dailyMap.entries()).sort().map(([date, count]) => ({ date, count }));
+  const wb = await db.collection('wordbook').where({ _openid: openid }).limit(500).get();
+  const today = localDateString();
+  return {
+    daily,
+    totalReviews: logs.data.length,
+    wordCount: wb.data.length,
+    dueCount: wb.data.filter((x) => !x.nextReviewAt || String(x.nextReviewAt).slice(0, 10) <= today).length,
+    todayReviews: dailyMap.get(today) || 0,
+  };
+}
+
+async function getSettings(openid) {
+  const rows = await db.collection('user_settings').where({ _openid: openid }).limit(1).get();
+  const s = rows.data[0] || {};
+  return {
+    llmBaseUrl: s.llmBaseUrl || '',
+    llmModel: s.llmModel || '',
+    llmKeySet: Boolean(s.llmApiKey),
+    mineruTokenSet: Boolean(s.mineruApiToken),
+  };
+}
+
+async function saveSettings(openid, data) {
+  const rows = await db.collection('user_settings').where({ _openid: openid }).limit(1).get();
+  const payload = {
+    llmBaseUrl: String(data.llmBaseUrl || '').trim(),
+    llmModel: String(data.llmModel || '').trim(),
+    updatedAt: nowIso(),
+  };
+  if (typeof data.llmApiKey === 'string') payload.llmApiKey = data.llmApiKey.trim();
+  if (typeof data.mineruApiToken === 'string') payload.mineruApiToken = data.mineruApiToken.trim();
+  if (rows.data.length) await db.collection('user_settings').doc(rows.data[0]._id).update({ data: payload });
+  else await db.collection('user_settings').add({ data: { _openid: openid, ...payload } });
+  return { ok: true };
+}
+
+async function removeWhere(collection, where) {
+  // 云函数端支持 where().remove() 批量删除，单次最多 100 条，循环清空
+  let removed = 0;
+  while (true) {
+    const res = await db.collection(collection).where(where).remove().catch(() => null);
+    if (!res || !res.stats) break;
+    removed += res.stats.removed || 0;
+    if (res.stats.removed < 100) break;
+  }
+  return removed;
+}

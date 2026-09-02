@@ -1,0 +1,34 @@
+<view class="container stack">
+  <view class="card stack">
+    <view>
+      <view class="section-title">导入真题文本</view>
+      <view class="muted">第一版先支持粘贴文本导入，PDF/DOCX/OCR 放到第二阶段。</view>
+    </view>
+
+    <input class="input" placeholder="文档名称，例如 Cambridge 18 Test 1" value="{{filename}}" bindinput="onFilenameInput" />
+
+    <picker mode="selector" range="{{examTypes}}" range-key="label" value="{{examIndex}}" bindchange="onExamChange">
+      <view class="picker-like">考试类型：{{examTypes[examIndex].label}}</view>
+    </picker>
+
+    <textarea class="textarea" maxlength="-1" placeholder="把阅读/听力原文粘贴到这里" value="{{text}}" bindinput="onTextInput" />
+
+    <view class="between muted">
+      <text>{{sentenceCount}} 句</text>
+      <text>{{tokenCount}} 个索引词</text>
+    </view>
+
+    <button class="primary-btn" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">建立索引</button>
+  </view>
+
+  <view class="card stack" wx:if="{{documents.length}}">
+    <view class="section-title">已导入文档</view>
+    <view class="doc" wx:for="{{documents}}" wx:key="_id">
+      <view>
+        <view class="doc-name">{{item.filename}}</view>
+        <view class="muted">{{item.examType}} · {{item.sentenceCount || 0}} 句</view>
+      </view>
+      <button class="danger-btn mini" data-id="{{item._id}}" bindtap="deleteDoc">删除</button>
+    </view>
+  </view>
+</view>

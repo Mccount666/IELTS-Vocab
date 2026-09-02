@@ -1,0 +1,33 @@
+<view class="container stack">
+  <view class="hero card">
+    <view class="hero-kicker">IELTS VOCAB</view>
+    <view class="hero-title">从你的真题里背单词</view>
+    <view class="hero-desc">导入阅读、听力或写作材料，查词时直接看到它在原文里出现过的句子。</view>
+    <view class="hero-actions">
+      <button class="primary-btn" bindtap="goSearch">开始查词</button>
+      <button class="secondary-btn" bindtap="goImport">导入文本</button>
+    </view>
+  </view>
+
+  <view class="stats-grid">
+    <view class="stat card">
+      <view class="stat-value">{{stats.wordCount}}</view>
+      <view class="stat-label">生词</view>
+    </view>
+    <view class="stat card">
+      <view class="stat-value">{{stats.dueCount}}</view>
+      <view class="stat-label">今日待复习</view>
+    </view>
+    <view class="stat card">
+      <view class="stat-value">{{stats.todayReviews}}</view>
+      <view class="stat-label">今日已复习</view>
+    </view>
+  </view>
+
+  <view class="card stack">
+    <view class="section-title">学习闭环</view>
+    <view class="step">1. 粘贴真题文本并建立索引</view>
+    <view class="step">2. 输入单词，查看来自原文的例句</view>
+    <view class="step">3. 收藏生词并按 SRS 到期复习</view>
+  </view>
+</view>

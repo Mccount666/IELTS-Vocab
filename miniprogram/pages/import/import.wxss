@@ -1,0 +1,24 @@
+.doc {
+  display: flex;
+  justify-content: space-between;
+  gap: 20rpx;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #edf3f4;
+}
+
+.doc:last-child {
+  border-bottom: 0;
+}
+
+.doc-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #14212b;
+}
+
+.mini {
+  width: 140rpx;
+  font-size: 24rpx;
+  line-height: 2.2;
+}

@@ -1,0 +1,35 @@
+.search-row {
+  display: grid;
+  grid-template-columns: 1fr 132rpx;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.search-btn {
+  line-height: 2.45;
+}
+
+.collect-btn {
+  width: 156rpx;
+  font-size: 25rpx;
+}
+
+.sentence-text {
+  font-size: 31rpx;
+  line-height: 1.75;
+  color: #1d3038;
+}
+
+.meta-row {
+  margin-top: 20rpx;
+}
+
+.mini {
+  width: 150rpx;
+  font-size: 24rpx;
+  line-height: 2.2;
+}
+
+.empty {
+  text-align: center;
+}

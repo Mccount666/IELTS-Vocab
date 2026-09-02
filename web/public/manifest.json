@@ -1,0 +1,16 @@
+{
+  "name": "真题词库",
+  "short_name": "真题词库",
+  "description": "你做过的真题，就是你最好的词典：导入真题、查词看真题例句、生词本复习",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f5fa",
+  "theme_color": "#7b61ff",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
