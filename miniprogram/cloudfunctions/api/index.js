@@ -1,4 +1,6 @@
 const cloud = require('wx-server-sdk');
+// Node 16.13 运行时没有原生 fetch，统一走 node-fetch（v2，CJS）
+const fetch = require('node-fetch');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
@@ -54,6 +56,7 @@ exports.main = async (event) => {
       'dictionary.lookup': () => dictionaryLookup(openid, data),
       'mineru.requestUploadUrls': () => mineruRequestUploadUrls(openid, data),
       'mineru.batchResult': () => mineruBatchResult(openid, data),
+      'mineru.extractText': () => mineruExtractText(openid, data),
     };
 
     if (!routes[action]) return fail(`未知操作：${action}`, 404);
@@ -432,6 +435,7 @@ async function getSettings(openid) {
   return {
     llmBaseUrl: s.llmBaseUrl || '',
     llmModel: s.llmModel || '',
+    llmProtocol: s.llmProtocol || 'openai',
     llmKeySet: Boolean(s.llmApiKey),
     mineruTokenSet: Boolean(s.mineruApiToken),
   };
@@ -444,6 +448,7 @@ async function saveSettings(openid, data) {
     llmModel: String(data.llmModel || '').trim(),
     updatedAt: nowIso(),
   };
+  if (data.llmProtocol === 'openai' || data.llmProtocol === 'anthropic') payload.llmProtocol = data.llmProtocol;
   if (typeof data.llmApiKey === 'string') payload.llmApiKey = data.llmApiKey.trim();
   if (typeof data.mineruApiToken === 'string') payload.mineruApiToken = data.mineruApiToken.trim();
   if (rows.data.length) await db.collection('user_settings').doc(rows.data[0]._id).update({ data: payload });
@@ -456,6 +461,7 @@ async function saveSettings(openid, data) {
 // Key 存 user_settings，只在云函数内使用，永不下发小程序端。
 
 function llmProtocol(settings) {
+  if (settings.llmProtocol === 'openai' || settings.llmProtocol === 'anthropic') return settings.llmProtocol;
   const base = String(settings.llmBaseUrl || '').toLowerCase();
   const model = String(settings.llmModel || '').toLowerCase();
   if (base.includes('anthropic') || model.startsWith('claude')) return 'anthropic';
@@ -464,7 +470,7 @@ function llmProtocol(settings) {
 
 function buildLlmRequest(settings, system, user) {
   const baseUrl = String(settings.llmBaseUrl || '').replace(/\/+$/, '');
-  const model = settings.llmModel || 'gpt-4o-mini';
+  const model = settings.llmModel || (llmProtocol(settings) === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini');
   const key = settings.llmApiKey || '';
   if (llmProtocol(settings) === 'anthropic') {
     return {
@@ -632,6 +638,28 @@ async function mineruBatchResult(openid, data) {
   return {
     items: items.map((it) => ({ state: it.state, fileName: it.file_name || '', fullZipUrl: it.full_zip_url || '', errMsg: it.err_msg || '' })),
   };
+}
+
+// 结果 zip 域名白名单（与 Web 版一致），防 SSRF
+const MINERU_ZIP_HOSTS = ['mineru.net', 'openxlab.org.cn', 'aliyuncs.com'];
+
+async function mineruExtractText(openid, data) {
+  const settings = await getSettingsRow(openid);
+  if (!settings.mineruApiToken) throw Object.assign(new Error('尚未配置 MinerU Token，请到「我的」页填写'), { statusCode: 400 });
+  const url = requireText(data.url, 'url');
+  let parsed;
+  try { parsed = new URL(url); } catch (e) { throw Object.assign(new Error('非法的结果下载地址'), { statusCode: 400 }); }
+  if (!MINERU_ZIP_HOSTS.some((h) => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
+    throw Object.assign(new Error('结果下载地址不在允许的域名内'), { statusCode: 400 });
+  }
+  const resp = await fetch(url);
+  if (!resp.ok) throw Object.assign(new Error(`下载 MinerU 结果失败（${resp.status}）`), { statusCode: 502 });
+  const buf = new Uint8Array(await resp.arrayBuffer());
+  const { unzipSync, strFromU8 } = require('fflate');
+  const files = unzipSync(buf);
+  const mdName = Object.keys(files).find((n) => n.endsWith('.md') || n.endsWith('.markdown'));
+  if (!mdName) throw Object.assign(new Error('结果压缩包中未找到 .md 全文文件'), { statusCode: 502 });
+  return { text: strFromU8(files[mdName]) };
 }
 
 // settings 行的原始读取（含明文 Key，仅云函数内部使用）

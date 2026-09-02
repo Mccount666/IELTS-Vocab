@@ -32,4 +32,7 @@ module.exports = {
   llmDefine: (data) => call('llm.define', data),
   llmTranslate: (data) => call('llm.translate', data),
   dictionaryLookup: (data) => call('dictionary.lookup', data),
+  mineruRequestUploadUrls: (data) => call('mineru.requestUploadUrls', data),
+  mineruBatchResult: (data) => call('mineru.batchResult', data),
+  mineruExtractText: (data) => call('mineru.extractText', data),
 };

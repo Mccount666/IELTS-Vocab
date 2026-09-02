@@ -1,12 +1,29 @@
 # 真题词库 · 微信小程序版
 
-这是 `ielts_vocab_app` 的微信小程序 MVP 版本，走微信云开发 / CloudBase 原生能力：
+这是 `ielts_vocab_app` 的微信小程序版本，走微信云开发 / CloudBase 原生能力：
 
 - 小程序端：WXML / WXSS / JS
 - 用户身份：微信 `OPENID`，无需用户名密码注册登录
-- 后端：CloudBase 云函数 `api`
+- 后端：CloudBase 云函数 `api`（首次调用自动创建全部集合）
 - 数据：CloudBase 云数据库集合
-- 第一版范围：粘贴文本导入、查词例句、生词本、复习 SRS、学习统计、基础设置
+
+## 功能
+
+| 模块 | 能力 |
+| --- | --- |
+| 导入 | **粘贴文本**本地分句建索引；**文件导入**（PDF / Word / 各类图片）经 MinerU 云端转 Markdown 后建索引，上传时可为来源命名（查词引用来源） |
+| 查词 | 真题例句、词形还原、联想、考试筛选、免费词典自动加载、**AI 释义**（LLM）、例句 AI 翻译 |
+| 生词本 | 收藏（带音标/释义/例句）、熟悉度筛选、到期视图 |
+| 复习 | SRS 调度、看词回忆 / 例句填空、忘记/模糊/认识评分 |
+| 统计 | 今日待复习/已复习、累计、30 天柱状图 |
+| 设置 | LLM 接口协议选择（**OpenAI Chat Completions / Anthropic Messages**，点选不需手填）、Base URL / 模型 / Key、主流大模型 Key 获取链接一键复制、MinerU Token 及获取链接 |
+
+## 集成说明
+
+- **LLM 双协议**：设置页选择协议。OpenAI 兼容走 `POST {Base URL}/chat/completions`（OpenAI / DeepSeek / 智谱 / Kimi / 通义等）；Anthropic 走 `POST {Base URL}/v1/messages`（Claude 及兼容接口）。
+- **Key 安全**：所有 Key 存 CloudBase `user_settings` 集合，仅云函数读取，小程序端只显示「已/未设置」，永不下发明文。
+- **MinerU**：v4 batch 流程（申请上传地址 → 客户端 PUT 上传 → 轮询结果 → 云函数下载 zip 解压出 Markdown）。结果 zip 下载域名白名单：`mineru.net / openxlab.org.cn / aliyuncs.com`。
+- **词典缓存**：`dictionary_cache` 全局共享，同一单词只消耗一次 LLM 额度。
 
 ## 目录
 

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "latest"
+    "wx-server-sdk": "latest",
+    "node-fetch": "^2.7.0",
+    "fflate": "^0.8.2"
   }
 }

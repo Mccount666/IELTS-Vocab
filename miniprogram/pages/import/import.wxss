@@ -1,3 +1,95 @@
+.file-pick-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+.pick-btn {
+  font-size: 26rpx;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: #f1f8f8;
+}
+
+.file-info {
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 27rpx;
+  color: #1d3038;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-remove {
+  color: #b42318;
+  font-size: 24rpx;
+  padding: 8rpx 16rpx;
+  background: #fff1f0;
+  border-radius: 999rpx;
+}
+
+.progress-box {
+  padding: 24rpx 20rpx;
+  border-radius: 18rpx;
+  background: #f1f8f8;
+}
+
+.progress-text {
+  color: #304b55;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.progress-track {
+  margin-top: 18rpx;
+  height: 6rpx;
+  border-radius: 999rpx;
+  background: #d7e7e5;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-dot {
+  position: absolute;
+  left: -60rpx;
+  width: 60rpx;
+  height: 6rpx;
+  background: #0f766e;
+  border-radius: 999rpx;
+  animation: slide 1.4s linear infinite;
+}
+
+@keyframes slide {
+  0% { left: -60rpx; }
+  100% { left: 100%; }
+}
+
+.error-box {
+  padding: 24rpx;
+  border-radius: 18rpx;
+  background: #fff1f0;
+  border: 1rpx solid #ffa39e;
+  color: #b42318;
+  font-size: 26rpx;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.retry-btn {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+}
+
 .doc {
   display: flex;
   justify-content: space-between;

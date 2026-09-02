@@ -1,8 +1,51 @@
 <view class="container stack">
   <view class="card stack">
     <view>
-      <view class="section-title">导入真题文本</view>
-      <view class="muted">第一版先支持粘贴文本导入，PDF/DOCX/OCR 放到第二阶段。</view>
+      <view class="section-title">文件导入 · MinerU 转 Markdown</view>
+      <view class="muted">支持 PDF / Word / 各类图片，云端识别后自动分句建索引。需先在「我的」页配置 MinerU Token。</view>
+    </view>
+
+    <view class="file-pick-row">
+      <button class="secondary-btn pick-btn" bindtap="chooseFile">选文件（PDF/Word）</button>
+      <button class="secondary-btn pick-btn" bindtap="chooseImage">选图片</button>
+    </view>
+
+    <view class="stack" wx:if="{{files.length}}">
+      <view class="section-title" style="font-size: 30rpx;">已选 {{files.length}} 个文件</view>
+      <view class="file-item" wx:for="{{files}}" wx:key="path">
+        <view class="file-info">
+          <view class="file-name">{{item.name}}</view>
+          <view class="muted">{{item.size < 1048576 ? (item.size / 1024) : (item.size / 1048576)}} {{item.size < 1048576 ? 'KB' : 'MB'}}</view>
+        </view>
+        <view class="file-remove" data-index="{{index}}" bindtap="removeFile" wx:if="{{fileState === 'idle'}}">移除</view>
+      </view>
+
+      <view class="stack">
+        <view class="muted">来源名称（查词时会显示这个来源）</view>
+        <input class="input" placeholder="例如 Cambridge 18 Test 1 阅读" value="{{docName}}" bindinput="onDocNameInput" disabled="{{fileState !== 'idle'}}" />
+        <picker mode="selector" range="{{examTypes}}" range-key="label" value="{{fileExamIndex}}" bindchange="onFileExamChange" disabled="{{fileState !== 'idle'}}">
+          <view class="picker-like">考试类型：{{examTypes[fileExamIndex].label}}</view>
+        </picker>
+      </view>
+
+      <button class="primary-btn" wx:if="{{fileState === 'idle'}}" bindtap="startFileImport">转换并导入</button>
+
+      <view class="progress-box" wx:if="{{fileState !== 'idle' && fileState !== 'error'}}">
+        <view class="progress-text">{{fileProgress}}</view>
+        <view class="progress-track"><view class="progress-dot"></view></view>
+      </view>
+
+      <view class="error-box" wx:if="{{fileState === 'error'}}">
+        <view>{{fileProgress}}</view>
+        <button class="secondary-btn retry-btn" bindtap="resetFileState">重试</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="card stack">
+    <view>
+      <view class="section-title">粘贴文本导入</view>
+      <view class="muted">已有的文本内容直接粘贴，本地分句建索引。</view>
     </view>
 
     <input class="input" placeholder="文档名称，例如 Cambridge 18 Test 1" value="{{filename}}" bindinput="onFilenameInput" />

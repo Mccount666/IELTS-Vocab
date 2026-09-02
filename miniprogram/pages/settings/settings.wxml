@@ -2,33 +2,70 @@
   <view class="card stack">
     <view>
       <view class="section-title">我的</view>
-      <view class="muted">微信小程序使用 OPENID 自动识别用户，不需要额外注册登录。</view>
+      <view class="muted">使用微信身份自动登录，数据按账号隔离。</view>
     </view>
     <view class="info-row">
       <text>身份</text>
-      <text>{{user.isAdmin ? '站长' : '普通用户'}}</text>
+      <text class="role-badge {{user.isAdmin ? 'admin' : ''}}">{{user.isAdmin ? '站长' : '普通用户'}}</text>
     </view>
     <button class="secondary-btn" bindtap="goStats">查看学习统计</button>
   </view>
 
   <view class="card stack">
     <view>
-      <view class="section-title">集成设置</view>
-      <view class="muted">Key 只保存在云端数据库，小程序端仅显示“已/未设置”，永不下发明文。查词、例句翻译需要 LLM；扫描 PDF 需 MinerU。</view>
+      <view class="section-title">LLM 智能释义 / 翻译</view>
+      <view class="muted">Key 只存在云端数据库，小程序端仅显示「已/未设置」，永不下发明文。</view>
     </view>
 
-    <input class="input" placeholder="LLM Base URL（如 https://api.openai.com/v1）" value="{{form.llmBaseUrl}}" bindinput="onInput" data-field="llmBaseUrl" />
-    <input class="input" placeholder="LLM Model（如 gpt-4o-mini / claude-3-5-haiku）" value="{{form.llmModel}}" bindinput="onInput" data-field="llmModel" />
-    <input class="input" password placeholder="LLM API Key，留空则不修改" value="{{form.llmApiKey}}" bindinput="onInput" data-field="llmApiKey" />
-    <input class="input" password placeholder="MinerU Token（扫描 PDF 用），留空则不修改" value="{{form.mineruApiToken}}" bindinput="onInput" data-field="mineruApiToken" />
-    <view class="muted protocol-hint">同时兼容 OpenAI Chat Completions 与 Anthropic Messages 接口：Base URL 含 anthropic 或模型名以 claude 开头时自动走 Anthropic 协议，其余走 OpenAI 协议。</view>
+    <picker mode="selector" range="{{protocols}}" range-key="label" value="{{protocolIndex}}" bindchange="onProtocolChange">
+      <view class="picker-like">接口协议：{{protocols[protocolIndex].label}}</view>
+    </picker>
+    <view class="muted protocol-desc">{{protocols[protocolIndex].desc}}</view>
 
-    <view class="muted">LLM Key：{{settings.llmKeySet ? '已设置' : '未设置'}} · MinerU：{{settings.mineruTokenSet ? '已设置' : '未设置'}}</view>
+    <input class="input" placeholder="Base URL（如 https://api.openai.com/v1）" value="{{form.llmBaseUrl}}" bindinput="onInput" data-field="llmBaseUrl" />
+    <input class="input" placeholder="模型名（如 gpt-4o-mini / claude-sonnet-4）" value="{{form.llmModel}}" bindinput="onInput" data-field="llmModel" />
+    <input class="input" password placeholder="API Key，留空则不修改" value="{{form.llmApiKey}}" bindinput="onInput" data-field="llmApiKey" />
+
+    <view class="link-block stack">
+      <view class="muted">没有 Key？点一下复制链接，到浏览器打开申请：</view>
+      <view class="link-row">
+        <view class="link-chip" data-url="https://platform.openai.com/api-keys" bindtap="copyLink">OpenAI</view>
+        <view class="link-chip" data-url="https://console.anthropic.com/settings/keys" bindtap="copyLink">Anthropic</view>
+        <view class="link-chip" data-url="https://platform.deepseek.com/api_keys" bindtap="copyLink">DeepSeek</view>
+        <view class="link-chip" data-url="https://open.bigmodel.cn/usercenter/apikeys" bindtap="copyLink">智谱 GLM</view>
+      </view>
+      <view class="link-row">
+        <view class="link-chip" data-url="https://platform.moonshot.cn/console/api-keys" bindtap="copyLink">Kimi</view>
+        <view class="link-chip" data-url="https://bailian.console.aliyun.com" bindtap="copyLink">通义千问</view>
+      </view>
+    </view>
+
+    <view class="muted">LLM Key：{{settings.llmKeySet ? '已设置' : '未设置'}}</view>
     <button class="primary-btn" loading="{{saving}}" bindtap="save">保存设置</button>
   </view>
 
   <view class="card stack">
-    <view class="section-title">当前状态</view>
-    <view class="muted">第一版小程序已实现粘贴文本导入、查词、生词本、复习和统计。PDF/DOCX/OCR 会放到第二阶段。</view>
+    <view>
+      <view class="section-title">MinerU · 文件转 Markdown</view>
+      <view class="muted">导入页上传的 PDF / Word / 图片由 MinerU 云端识别成 Markdown。Token 在 mineru.net 注册后于控制台「API」页创建。</view>
+    </view>
+
+    <input class="input" password placeholder="MinerU API Token，留空则不修改" value="{{form.mineruApiToken}}" bindinput="onInput" data-field="mineruApiToken" />
+
+    <view class="link-block stack">
+      <view class="muted">获取 Token：</view>
+      <view class="link-row">
+        <view class="link-chip" data-url="https://mineru.net" bindtap="copyLink">mineru.net</view>
+      </view>
+    </view>
+
+    <view class="muted">MinerU：{{settings.mineruTokenSet ? '已设置' : '未设置'}}</view>
+  </view>
+
+  <view class="card stack">
+    <view class="section-title">功能说明</view>
+    <view class="muted">· 查词：例句来自你自己导入的真题，免费词典自动加载，AI 释义需配置 LLM</view>
+    <view class="muted">· 导入：粘贴文本本地建索引；PDF / Word / 图片经 MinerU 转 Markdown</view>
+    <view class="muted">· 复习：SRS 到期调度，忘记/模糊/认识三档评分</view>
   </view>
 </view>
