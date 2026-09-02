@@ -9,12 +9,12 @@
 .delete-btn {
   width: 128rpx;
   font-size: 24rpx;
-  line-height: 2.2;
+  padding: 14rpx 0;
 }
 
 .definition {
   margin-top: 18rpx;
-  color: #1d3038;
+  color: #27454e;
   font-size: 28rpx;
   line-height: 1.65;
 }

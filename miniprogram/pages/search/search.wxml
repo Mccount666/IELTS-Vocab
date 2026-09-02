@@ -3,7 +3,7 @@
     <view class="section-title">查一个单词</view>
     <view class="search-row">
       <input class="input search-input" placeholder="例如 environment" value="{{word}}" confirm-type="search" bindinput="onWordInput" bindconfirm="submit" />
-      <button class="primary-btn search-btn" bindtap="submit" loading="{{loading}}">查</button>
+      <view class="btn primary search-btn" hover-class="btn-hover" bindtap="submit">查</view>
     </view>
     <picker mode="selector" range="{{examTypes}}" range-key="label" value="{{examIndex}}" bindchange="onExamChange">
       <view class="picker-like">范围：{{examTypes[examIndex].label}}</view>
@@ -19,7 +19,7 @@
         <view class="word">{{result.word}}</view>
         <view class="muted" wx:if="{{result.lemma}}">词形：{{result.lemma}}</view>
       </view>
-      <button class="secondary-btn collect-btn" bindtap="collectWord">{{result.wordbookEntry ? '已收录' : '收录'}}</button>
+      <view class="btn secondary collect-btn" hover-class="btn-hover" bindtap="collectWord">{{result.wordbookEntry ? '已收录' : '收录'}}</view>
     </view>
 
     <view class="dict-box stack" wx:if="{{dict}}">
@@ -51,8 +51,8 @@
       <view class="between muted meta-row">
         <text>位置 {{item.position + 1}}</text>
         <view class="row mini-row">
-          <button class="secondary-btn mini" data-id="{{item._id}}" data-text="{{item.text}}" bindtap="translateSentence">翻译</button>
-          <button class="secondary-btn mini" data-id="{{item._id}}" bindtap="collectSentence">收录</button>
+          <view class="btn secondary mini" hover-class="btn-hover" data-id="{{item._id}}" data-text="{{item.text}}" bindtap="translateSentence">翻译</view>
+          <view class="btn secondary mini" hover-class="btn-hover" data-id="{{item._id}}" bindtap="collectSentence">收录</view>
         </view>
       </view>
     </view>

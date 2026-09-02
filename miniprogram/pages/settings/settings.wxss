@@ -3,36 +3,36 @@
   justify-content: space-between;
   align-items: center;
   padding: 20rpx 0;
-  color: #304b55;
+  color: #3f6570;
   font-size: 28rpx;
-  border-bottom: 1rpx solid #edf3f4;
+  border-bottom: 1rpx solid #e5f2ef;
 }
 
 .role-badge {
   padding: 6rpx 20rpx;
   border-radius: 999rpx;
-  background: #eef7f6;
-  color: #6b7a86;
+  background: #eafcf6;
+  color: #7d949e;
   font-size: 24rpx;
 }
 
 .role-badge.admin {
-  background: #0f766e;
+  background: #0d9488;
   color: #ffffff;
 }
 
 .protocol-desc {
   padding: 18rpx 20rpx;
   border-radius: 16rpx;
-  background: #f1f8f8;
+  background: #f0fbf7;
   font-size: 24rpx;
 }
 
 .link-block {
   padding: 22rpx 20rpx;
   border-radius: 18rpx;
-  background: #f8fcfc;
-  border: 1rpx solid #e3efee;
+  background: #f6fdfb;
+  border: 1rpx solid #ddf2ec;
 }
 
 .link-row {
@@ -46,12 +46,12 @@
   padding: 10rpx 22rpx;
   border-radius: 999rpx;
   background: #ffffff;
-  border: 1rpx solid #0f766e;
-  color: #0f766e;
+  border: 1rpx solid #0d9488;
+  color: #0d9488;
   font-size: 24rpx;
 }
 
 .link-chip:active {
-  background: #0f766e;
+  background: #0d9488;
   color: #ffffff;
 }

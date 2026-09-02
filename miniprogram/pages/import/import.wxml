@@ -6,8 +6,8 @@
     </view>
 
     <view class="file-pick-row">
-      <button class="secondary-btn pick-btn" bindtap="chooseFile">选文件（PDF/Word）</button>
-      <button class="secondary-btn pick-btn" bindtap="chooseImage">选图片</button>
+      <view class="btn secondary pick-btn" hover-class="btn-hover" bindtap="chooseFile">选文件（PDF/Word）</view>
+      <view class="btn secondary pick-btn" hover-class="btn-hover" bindtap="chooseImage">选图片</view>
     </view>
 
     <view class="stack" wx:if="{{files.length}}">
@@ -71,7 +71,7 @@
         <view class="doc-name">{{item.filename}}</view>
         <view class="muted">{{item.examType}} · {{item.sentenceCount || 0}} 句</view>
       </view>
-      <button class="danger-btn mini" data-id="{{item._id}}" bindtap="deleteDoc">删除</button>
+      <view class="btn danger doc-delete" hover-class="btn-hover" data-id="{{item._id}}" bindtap="deleteDoc">删除</view>
     </view>
   </view>
 </view>

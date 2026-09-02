@@ -5,8 +5,8 @@
     <view class="hero-title">从你的真题里查单词</view>
     <view class="hero-desc">导入阅读、听力或写作材料，查词时直接看到它在原文里出现过的句子。</view>
     <view class="hero-actions">
-      <button class="primary-btn" bindtap="goSearch">开始查词</button>
-      <button class="secondary-btn" bindtap="goImport">导入文本</button>
+      <view class="btn primary" hover-class="btn-hover" bindtap="goSearch">开始查词</view>
+      <view class="btn secondary" hover-class="btn-hover" bindtap="goImport">导入文本</view>
     </view>
   </view>
 

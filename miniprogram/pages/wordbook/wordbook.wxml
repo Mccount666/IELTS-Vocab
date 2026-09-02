@@ -15,7 +15,7 @@
           <view class="word">{{item.word}}</view>
           <view class="muted" wx:if="{{item.phonetic}}">{{item.phonetic}}</view>
         </view>
-        <button class="danger-btn delete-btn" data-id="{{item._id}}" bindtap="deleteWord">删除</button>
+        <view class="btn danger delete-btn" hover-class="btn-hover" data-id="{{item._id}}" bindtap="deleteWord">删除</view>
       </view>
       <view class="definition" wx:if="{{item.translation || item.definition}}">{{item.translation || item.definition}}</view>
       <view class="muted added-row" wx:if="{{item.addedDate}}">收藏于 {{item.addedDate}}</view>

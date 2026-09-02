@@ -8,13 +8,13 @@
   ],
   "window": {
     "navigationBarTitleText": "真题词库",
-    "navigationBarBackgroundColor": "#f7fbfb",
+    "navigationBarBackgroundColor": "#f2fbf8",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#f7fbfb"
+    "backgroundColor": "#f2fbf8"
   },
   "tabBar": {
     "color": "#6b7a86",
-    "selectedColor": "#0f766e",
+    "selectedColor": "#0d9488",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
