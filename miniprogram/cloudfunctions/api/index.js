@@ -146,6 +146,13 @@ async function setSiteSetting(key, value) {
   }
 }
 
+
+// 安全读取当前用户自己的文档：doc(id).get() 不回 _openid，改用 where 查询校验归属
+async function getOwnedDoc(collection, openid, id) {
+  const rows = await db.collection(collection).where({ _id: id, _openid: openid }).limit(1).get();
+  return rows.data.length ? rows.data[0] : null;
+}
+
 // 自举：云函数对所在环境有管理员权限，缺失的集合在首次调用时自动创建，
 // 免去在控制台手动建集合的步骤。进程内缓存避免每次调用都探测。
 let collectionsReady = false;
@@ -215,8 +222,8 @@ async function listDocuments(openid) {
 
 async function deleteDocument(openid, data) {
   const documentId = requireText(data.documentId || data.id, 'documentId');
-  const doc = await db.collection('documents').doc(documentId).get().catch(() => null);
-  if (!doc || !doc.data || doc.data._openid !== openid) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
+  const doc = await getOwnedDoc('documents', openid, documentId);
+  if (!doc) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
   await db.collection('documents').doc(documentId).remove();
   await removeWhere('sentences', { _openid: openid, documentId });
   await removeWhere('word_index', { _openid: openid, documentId });
@@ -231,13 +238,13 @@ function chunks(arr, size) {
 
 async function appendSentences(openid, data) {
   const documentId = requireText(data.documentId || data.id, 'documentId');
-  const doc = await db.collection('documents').doc(documentId).get().catch(() => null);
-  if (!doc || !doc.data || doc.data._openid !== openid) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
+  const doc = await getOwnedDoc('documents', openid, documentId);
+  if (!doc) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
   const items = Array.isArray(data.sentences) ? data.sentences.slice(0, 500) : [];
 
   // 预处理：句子文档与索引 token 一次算好，避免上千次串行写库超时
   const prepared = [];
-  let cursor = Number(doc.data.sentenceCount) || 0;
+  let cursor = Number(doc.sentenceCount) || 0;
   for (const item of items) {
     const text = String(item.text || '').trim();
     if (!text) continue;
@@ -262,7 +269,7 @@ async function appendSentences(openid, data) {
     const sentenceId = ids[i];
     if (!sentenceId) return;
     for (const word of p.tokens) {
-      indexDocs.push({ _openid: openid, word, lemma: lemmatize(word), sentenceId, documentId, examType: doc.data.examType || 'Other' });
+      indexDocs.push({ _openid: openid, word, lemma: lemmatize(word), sentenceId, documentId, examType: doc.examType || 'Other' });
     }
   });
   for (const part of chunks(indexDocs, 500)) {
@@ -275,9 +282,9 @@ async function appendSentences(openid, data) {
 
 async function getSentence(openid, data) {
   const id = requireText(data.id, 'id');
-  const row = await db.collection('sentences').doc(id).get().catch(() => null);
-  if (!row || !row.data || row.data._openid !== openid) throw Object.assign(new Error('句子不存在或不属于你'), { statusCode: 404 });
-  return { sentence: row.data };
+  const row = await getOwnedDoc('sentences', openid, id);
+  if (!row) throw Object.assign(new Error('句子不存在或不属于你'), { statusCode: 404 });
+  return { sentence: row };
 }
 
 async function search(openid, data) {
@@ -363,22 +370,22 @@ async function addWordbook(openid, data) {
 
 async function deleteWordbook(openid, data) {
   const id = requireText(data.id, 'id');
-  const row = await db.collection('wordbook').doc(id).get().catch(() => null);
-  if (!row || !row.data || row.data._openid !== openid) throw Object.assign(new Error('生词不存在或不属于你'), { statusCode: 404 });
+  const row = await getOwnedDoc('wordbook', openid, id);
+  if (!row) throw Object.assign(new Error('生词不存在或不属于你'), { statusCode: 404 });
   await db.collection('wordbook').doc(id).remove();
   return { ok: true };
 }
 
 async function reviewWordbook(openid, data) {
   const id = requireText(data.id, 'id');
-  const row = await db.collection('wordbook').doc(id).get().catch(() => null);
-  if (!row || !row.data || row.data._openid !== openid) throw Object.assign(new Error('生词不存在或不属于你'), { statusCode: 404 });
-  const graded = gradeReview(row.data.familiarity, data.grade);
+  const row = await getOwnedDoc('wordbook', openid, id);
+  if (!row) throw Object.assign(new Error('生词不存在或不属于你'), { statusCode: 404 });
+  const graded = gradeReview(row.familiarity, data.grade);
   await db.collection('wordbook').doc(id).update({
     data: { familiarity: graded.familiarity, lastReviewedAt: graded.reviewedAt, nextReviewAt: graded.nextReviewAt },
   });
   await db.collection('review_log').add({
-    data: { _openid: openid, wordbookId: id, word: row.data.word, gradedAs: graded.gradedAs, familiarity: graded.familiarity, reviewDate: graded.reviewDate, reviewedAt: graded.reviewedAt },
+    data: { _openid: openid, wordbookId: id, word: row.word, gradedAs: graded.gradedAs, familiarity: graded.familiarity, reviewDate: graded.reviewDate, reviewedAt: graded.reviewedAt },
   });
   return graded;
 }
@@ -388,8 +395,8 @@ async function batchWordbook(openid, data) {
   if (!ids.length) return { changed: 0 };
   let changed = 0;
   for (const id of ids) {
-    const row = await db.collection('wordbook').doc(id).get().catch(() => null);
-    if (!row || !row.data || row.data._openid !== openid) continue;
+    const row = await getOwnedDoc('wordbook', openid, id);
+    if (!row) continue;
     if (data.type === 'delete') await db.collection('wordbook').doc(id).remove();
     if (data.type === 'familiarity') await db.collection('wordbook').doc(id).update({ data: { familiarity: normalizeFamiliarity(data.familiarity) } });
     changed += 1;

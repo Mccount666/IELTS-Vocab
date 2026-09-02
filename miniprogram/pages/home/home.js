@@ -18,7 +18,11 @@ Page({
       this.setData({ stats, error: '' });
     } catch (err) {
       console.warn(err);
-      this.setData({ error: err.errMsg || err.message || '初始化失败' });
+      const raw = err.errMsg || err.message || '';
+      const friendly = raw.includes('Cloud API') || raw.includes('cloud')
+        ? '云服务暂时不可用，请稍后下拉刷新重试'
+        : raw || '初始化失败，请稍后重试';
+      this.setData({ error: friendly });
     }
   },
 
