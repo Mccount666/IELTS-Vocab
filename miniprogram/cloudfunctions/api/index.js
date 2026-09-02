@@ -463,8 +463,12 @@ async function saveSettings(openid, data) {
     updatedAt: nowIso(),
   };
   if (data.llmProtocol === 'openai' || data.llmProtocol === 'anthropic') payload.llmProtocol = data.llmProtocol;
-  if (typeof data.llmApiKey === 'string') payload.llmApiKey = data.llmApiKey.trim();
-  if (typeof data.mineruApiToken === 'string') payload.mineruApiToken = data.mineruApiToken.trim();
+  // Key/Token 只在非空时更新：前端表单「留空则不修改」，空字符串绝不能抹掉已存的 Key
+  if (typeof data.llmApiKey === 'string' && data.llmApiKey.trim()) payload.llmApiKey = data.llmApiKey.trim();
+  if (typeof data.mineruApiToken === 'string' && data.mineruApiToken.trim()) payload.mineruApiToken = data.mineruApiToken.trim();
+  // 显式清除（UI 不会误发，仅主动清除动作使用）
+  if (data.clearLlmKey === true) payload.llmApiKey = '';
+  if (data.clearMineruToken === true) payload.mineruApiToken = '';
   if (rows.data.length) await db.collection('user_settings').doc(rows.data[0]._id).update({ data: payload });
   else await db.collection('user_settings').add({ data: { _openid: openid, ...payload } });
   return { ok: true };
@@ -595,7 +599,7 @@ async function dictionaryLookup(openid, data) {
     const c = cached.data[0];
     return { word, phonetic: c.phonetic, translation: c.translation, definition: c.definition, examples: JSON.parse(c.examples || '[]'), source: c.source, cached: true };
   }
-  const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`).catch(() => null);
+  const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { timeout: 8000 }).catch(() => null);
   const arr = resp && resp.ok ? await resp.json().catch(() => null) : null;
   if (!Array.isArray(arr) || !arr.length) return { word, translation: '', definition: '', examples: [], source: '', cached: false, notFound: true };
   const e = arr[0];

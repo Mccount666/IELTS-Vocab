@@ -17,9 +17,10 @@ function putFile(url, arrayBuffer, contentType) {
       url,
       method: 'PUT',
       data: arrayBuffer,
+      timeout: 300000,
       header: { 'content-type': contentType },
       success: (res) => (res.statusCode >= 200 && res.statusCode < 300 ? resolve(res) : reject(new Error(`上传失败（${res.statusCode}）`))),
-      fail: (err) => reject(new Error(err.errMsg || '上传失败')),
+      fail: (err) => reject(new Error(err.errMsg === 'request:fail timeout' ? '上传超时，请检查网络后重试' : (err.errMsg || '上传失败'))),
     });
   });
 }
@@ -149,7 +150,14 @@ Page({
 
   acceptFiles(files) {
     if (!files || !files.length) return;
-    const merged = this.data.files.concat(files).slice(0, 9);
+    if (this.data.fileState !== 'idle') {
+      toast('正在导入中，请等当前任务结束');
+      return;
+    }
+    const merged = this.data.files.concat(files).slice(0, 9).map((f) => ({
+      ...f,
+      sizeText: f.size < 1048576 ? `${Math.max(1, Math.round(f.size / 1024))} KB` : `${(f.size / 1048576).toFixed(1)} MB`,
+    }));
     this.setData({
       files: merged,
       docName: this.data.docName || baseName(merged[0].name),
@@ -222,8 +230,8 @@ Page({
   },
 
   async pollBatch(batchId) {
-    const INTERVAL = 3500;
-    const MAX_ROUNDS = 60; // 最长约 3.5 分钟
+    const INTERVAL = 5000;
+    const MAX_ROUNDS = 60; // 最长约 5 分钟
     for (let round = 0; round < MAX_ROUNDS; round++) {
       await new Promise((r) => setTimeout(r, INTERVAL));
       const res = await api.mineruBatchResult({ batchId });

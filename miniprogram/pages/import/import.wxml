@@ -15,7 +15,7 @@
       <view class="file-item" wx:for="{{files}}" wx:key="path">
         <view class="file-info">
           <view class="file-name">{{item.name}}</view>
-          <view class="muted">{{item.size < 1048576 ? (item.size / 1024) : (item.size / 1048576)}} {{item.size < 1048576 ? 'KB' : 'MB'}}</view>
+          <view class="muted">{{item.sizeText}}</view>
         </view>
         <view class="file-remove" data-index="{{index}}" bindtap="removeFile" wx:if="{{fileState === 'idle'}}">移除</view>
       </view>
