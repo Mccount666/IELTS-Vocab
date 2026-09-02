@@ -323,11 +323,18 @@ async function search(openid, data) {
     index = await db.collection('word_index').where(fallback).limit(200).get();
   }
   const sentenceIds = Array.from(new Set(index.data.map((x) => x.sentenceId))).slice(0, 100);
-  const sentences = [];
-  for (const sentenceId of sentenceIds) {
-    const row = await db.collection('sentences').doc(sentenceId).get().catch(() => null);
-    if (row && row.data && row.data._openid === openid) sentences.push(row.data);
+  // 批量查句子（原 N+1 串行太慢），并带上来源文档名供前端引用
+  const sentences = sentenceIds.length
+    ? (await db.collection('sentences').where({ _openid: openid, _id: _.in(sentenceIds) }).limit(100).get()).data
+    : [];
+  const docIds = Array.from(new Set(sentences.map((s) => s.documentId))).filter(Boolean);
+  const nameByDoc = new Map();
+  for (const part of chunks(docIds, 90)) {
+    const d = await db.collection('documents').where({ _openid: openid, _id: _.in(part) }).limit(90).get();
+    for (const row of d.data) nameByDoc.set(row._id, row.filename);
   }
+  for (const s of sentences) s.documentFilename = nameByDoc.get(s.documentId) || '';
+  sentences.sort((a, b) => (a.documentId < b.documentId ? -1 : a.documentId > b.documentId ? 1 : a.position - b.position));
   const wb = await db.collection('wordbook').where({ _openid: openid, word: query }).limit(1).get();
   return { word: query, lemma, sentences, wordbookEntry: wb.data[0] || null };
 }

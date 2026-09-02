@@ -25,5 +25,6 @@
   <view class="card empty" wx:else>
     <view class="section-title">还没有生词</view>
     <view class="muted">在查词页把单词或例句收录进来。</view>
+    <view class="btn secondary go-search" hover-class="btn-hover" bindtap="goSearch">去查词</view>
   </view>
 </view>

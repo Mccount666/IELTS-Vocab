@@ -83,3 +83,33 @@
   gap: 12rpx;
   flex-shrink: 0;
 }
+
+.hl {
+  color: #0d9488;
+  background: #c9faf0;
+  border-radius: 8rpx;
+  padding: 0 6rpx;
+  font-weight: 700;
+}
+
+.source {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.clear-btn {
+  padding: 6rpx 18rpx;
+  background: #f0fbf7;
+  border-radius: 999rpx;
+}
+
+.word-main {
+  min-width: 0;
+}
+
+.center {
+  text-align: center;
+}

@@ -1,4 +1,5 @@
 const api = require('../../utils/api');
+const { lemmatize } = require('../../utils/pipeline');
 const { toast } = require('../../utils/format');
 
 const examTypes = [
@@ -9,6 +10,27 @@ const examTypes = [
   { label: '其他', value: 'Other' },
 ];
 
+const HISTORY_KEY = 'iv_recent_words';
+
+function loadHistory() {
+  try {
+    const list = wx.getStorageSync(HISTORY_KEY);
+    return Array.isArray(list) ? list.slice(0, 10) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// 把例句拆成 {t, hl} 片段：命中目标词/词形的片段高亮
+function highlightParts(text, word, lemma) {
+  const parts = String(text || '').split(/([^A-Za-z']+)/).filter((s) => s !== '');
+  return parts.map((t) => {
+    const low = t.toLowerCase();
+    const hl = low === word || low === lemma || lemmatize(low) === lemma;
+    return { t, hl };
+  });
+}
+
 Page({
   data: {
     examTypes,
@@ -17,12 +39,18 @@ Page({
     loading: false,
     searched: false,
     suggestions: [],
+    history: [],
     result: {},
     sentences: [],
+    sentenceViews: [],
     dict: null,
     dictLoading: false,
     dictMode: '',
     translations: {},
+  },
+
+  onLoad() {
+    this.setData({ history: loadHistory() });
   },
 
   onWordInput(e) {
@@ -57,14 +85,39 @@ Page({
     this.submit();
   },
 
+  pickHistory(e) {
+    const word = e.currentTarget.dataset.word;
+    this.setData({ word, suggestions: [] });
+    this.submit();
+  },
+
+  clearHistory() {
+    try { wx.removeStorageSync(HISTORY_KEY); } catch (e) { /* 忽略存储异常 */ }
+    this.setData({ history: [] });
+    toast('已清空历史', 'none');
+  },
+
+  pushHistory(word) {
+    let list = loadHistory();
+    list = [word, ...list.filter((w) => w !== word)].slice(0, 10);
+    try { wx.setStorageSync(HISTORY_KEY, list); } catch (e) { /* 忽略存储异常 */ }
+    this.setData({ history: list });
+  },
+
   async submit() {
-    const word = this.data.word.trim();
+    const word = this.data.word.trim().toLowerCase();
     if (!word) return toast('请输入单词');
     this.setData({ loading: true, searched: true, suggestions: [], dict: null, dictMode: '', translations: {} });
     try {
       const examType = examTypes[this.data.examIndex].value;
       const result = await api.search({ word, examType });
-      this.setData({ result, sentences: result.sentences || [] });
+      const sentenceViews = (result.sentences || []).map((s) => ({
+        ...s,
+        parts: highlightParts(s.text, result.word, result.lemma),
+        sourceLabel: s.documentFilename ? `${s.documentFilename} · 位置 ${s.position + 1}` : `位置 ${s.position + 1}`,
+      }));
+      this.setData({ result, sentences: result.sentences || [], sentenceViews });
+      this.pushHistory(word);
       this.loadDict(word);
     } catch (err) {
       toast(err.message || '查询失败');

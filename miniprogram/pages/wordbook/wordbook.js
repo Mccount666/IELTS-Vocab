@@ -10,7 +10,15 @@ Page({
     this.refresh();
   },
 
-  async refresh() {
+  onPullDownRefresh() {
+    this.refresh(() => wx.stopPullDownRefresh());
+  },
+
+  goSearch() {
+    wx.switchTab({ url: '/pages/search/search' });
+  },
+
+  async refresh(done) {
     try {
       const res = await api.listWordbook();
       const words = (res.words || []).map((item) => ({
@@ -20,6 +28,8 @@ Page({
       this.setData({ words });
     } catch (err) {
       toast(err.message || '加载失败');
+    } finally {
+      if (done) done();
     }
   },
 

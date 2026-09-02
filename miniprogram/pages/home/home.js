@@ -12,7 +12,11 @@ Page({
     this.refresh();
   },
 
-  async refresh() {
+  onPullDownRefresh() {
+    this.refresh(() => wx.stopPullDownRefresh());
+  },
+
+  async refresh(done) {
     try {
       await api.initUser();
       const [docs, wb] = await Promise.all([api.listDocuments(), api.listWordbook()]);
@@ -28,6 +32,8 @@ Page({
         ? '云服务暂时不可用，请稍后下拉刷新重试'
         : raw || '初始化失败，请稍后重试';
       this.setData({ error: friendly });
+    } finally {
+      if (done) done();
     }
   },
 

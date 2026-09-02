@@ -13,9 +13,19 @@
     </view>
   </view>
 
+  <view class="card stack" wx:if="{{history.length && !result.word}}">
+    <view class="between">
+      <view class="section-title" style="font-size: 30rpx;">最近查询</view>
+      <view class="muted clear-btn" bindtap="clearHistory">清空</view>
+    </view>
+    <view class="chip-row">
+      <view class="chip" wx:for="{{history}}" wx:key="*this" data-word="{{item}}" bindtap="pickHistory">{{item}}</view>
+    </view>
+  </view>
+
   <view class="card stack" wx:if="{{result.word}}">
     <view class="between">
-      <view>
+      <view class="word-main">
         <view class="word">{{result.word}}</view>
         <view class="muted" wx:if="{{result.lemma}}">词形：{{result.lemma}}</view>
       </view>
@@ -25,9 +35,7 @@
     <view class="dict-box stack" wx:if="{{dict}}">
       <view class="between">
         <view class="muted">{{dict.source || '词典'}}</view>
-        <view class="chip-row">
-          <view class="chip {{dictMode === 'llm' ? 'active' : ''}}" bindtap="aiDefine">AI 释义</view>
-        </view>
+        <view class="chip" bindtap="aiDefine">AI 释义</view>
       </view>
       <view wx:if="{{dict.phonetic}}" class="phonetic">{{dict.phonetic}}</view>
       <view wx:if="{{dict.translation}}" class="dict-translation">{{dict.translation}}</view>
@@ -40,16 +48,16 @@
       </view>
     </view>
     <view class="muted center" wx:elif="{{dictLoading}}">释义加载中…</view>
-    <button class="secondary-btn" wx:else bindtap="aiDefine">AI 释义</button>
+    <view class="muted center" wx:elif="{{dictMode !== 'llm'}}">免费词典暂无此词，可点上方 AI 释义</view>
   </view>
 
-  <view class="stack" wx:if="{{sentences.length}}">
-    <view class="sentence card" wx:for="{{sentences}}" wx:key="_id">
-      <view class="sentence-text">{{item.text}}</view>
+  <view class="stack" wx:if="{{sentenceViews.length}}">
+    <view class="sentence card" wx:for="{{sentenceViews}}" wx:key="_id">
+      <view class="sentence-text"><text wx:for="{{item.parts}}" wx:for-item="seg" wx:key="index"><text class="{{seg.hl ? 'hl' : ''}}">{{seg.t}}</text></text></view>
       <view class="translation" wx:if="{{translations[item._id] && translations[item._id] !== '…'}}">{{translations[item._id]}}</view>
       <view class="muted" wx:elif="{{translations[item._id] === '…'}}">翻译中…</view>
       <view class="between muted meta-row">
-        <text>位置 {{item.position + 1}}</text>
+        <text class="source">{{item.sourceLabel}}</text>
         <view class="row mini-row">
           <view class="btn secondary mini" hover-class="btn-hover" data-id="{{item._id}}" data-text="{{item.text}}" bindtap="translateSentence">翻译</view>
           <view class="btn secondary mini" hover-class="btn-hover" data-id="{{item._id}}" bindtap="collectSentence">收录</view>

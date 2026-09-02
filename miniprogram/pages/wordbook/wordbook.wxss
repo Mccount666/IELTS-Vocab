@@ -27,3 +27,9 @@
 .empty {
   text-align: center;
 }
+
+.go-search {
+  margin: 24rpx auto 0;
+  width: 240rpx;
+  padding: 18rpx 0;
+}
