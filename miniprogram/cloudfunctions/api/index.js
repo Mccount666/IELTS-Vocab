@@ -264,11 +264,25 @@ async function appendSentences(openid, data) {
   }
   if (!prepared.length) return { inserted: 0, ids: [] };
 
-  // 批量写句子，拿回与输入同序的 ids
-  const ids = [];
+  // 批量写句子（云数据库批量 add 不回传文档 id）
   for (const part of chunks(prepared.map((p) => p.doc), 100)) {
-    const res = await db.collection('sentences').add({ data: part });
-    ids.push(...(res.ids || []));
+    await db.collection('sentences').add({ data: part });
+  }
+
+  // 回读本批句子的真实 _id：position 在同一文档内唯一且本批取值连续，
+  // 按范围查回后用 position 对位，不依赖批量 add 的返回值形状
+  const positions = prepared.map((p) => p.doc.position);
+  const minPos = Math.min(...positions);
+  const maxPos = Math.max(...positions);
+  const back = await db.collection('sentences')
+    .where({ _openid: openid, documentId, position: _.gte(minPos).and(_.lte(maxPos)) })
+    .orderBy('position', 'asc')
+    .limit(prepared.length)
+    .get();
+  const byPos = new Map(back.data.map((s) => [s.position, s._id]));
+  const ids = prepared.map((p) => byPos.get(p.doc.position) || null);
+  if (back.data.length < prepared.length) {
+    console.warn(`appendSentences: 回读句子数 ${back.data.length} < 写入数 ${prepared.length}`);
   }
 
   // 批量写倒排索引
