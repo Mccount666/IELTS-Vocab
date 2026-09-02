@@ -1,10 +1,9 @@
-.review-btn {
-  width: 142rpx;
-  font-size: 26rpx;
-}
-
 .word-card {
   padding: 26rpx;
+}
+
+.word-main {
+  min-width: 0;
 }
 
 .delete-btn {
@@ -15,6 +14,14 @@
 
 .definition {
   margin-top: 18rpx;
+  color: #1d3038;
+  font-size: 28rpx;
+  line-height: 1.65;
+}
+
+.added-row {
+  margin-top: 12rpx;
+  font-size: 23rpx;
 }
 
 .empty {

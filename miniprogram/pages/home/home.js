@@ -1,9 +1,10 @@
 const api = require('../../utils/api');
-const { localDateString } = require('../../utils/srs');
+const { toast } = require('../../utils/format');
 
 Page({
   data: {
-    stats: { wordCount: 0, dueCount: 0, todayReviews: 0 },
+    docCount: 0,
+    wordCount: 0,
     error: '',
   },
 
@@ -14,8 +15,12 @@ Page({
   async refresh() {
     try {
       await api.initUser();
-      const stats = await api.stats({ since: localDateString(new Date(Date.now() - 29 * 86400000)) });
-      this.setData({ stats, error: '' });
+      const [docs, wb] = await Promise.all([api.listDocuments(), api.listWordbook()]);
+      this.setData({
+        docCount: (docs.documents || []).length,
+        wordCount: (wb.words || []).length,
+        error: '',
+      });
     } catch (err) {
       console.warn(err);
       const raw = err.errMsg || err.message || '';

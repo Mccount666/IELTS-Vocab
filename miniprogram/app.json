@@ -4,8 +4,6 @@
     "pages/search/search",
     "pages/import/import",
     "pages/wordbook/wordbook",
-    "pages/review/review",
-    "pages/stats/stats",
     "pages/settings/settings"
   ],
   "window": {

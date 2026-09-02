@@ -8,7 +8,6 @@
       <text>身份</text>
       <text class="role-badge {{user.isAdmin ? 'admin' : ''}}">{{user.isAdmin ? '站长' : '普通用户'}}</text>
     </view>
-    <button class="secondary-btn" bindtap="goStats">查看学习统计</button>
   </view>
 
   <view class="card stack">
@@ -66,6 +65,6 @@
     <view class="section-title">功能说明</view>
     <view class="muted">· 查词：例句来自你自己导入的真题，免费词典自动加载，AI 释义需配置 LLM</view>
     <view class="muted">· 导入：粘贴文本本地建索引；PDF / Word / 图片经 MinerU 转 Markdown</view>
-    <view class="muted">· 复习：SRS 到期调度，忘记/模糊/认识三档评分</view>
+    <view class="muted">· 生词本：查词时一键收藏单词和例句，随时回看</view>
   </view>
 </view>

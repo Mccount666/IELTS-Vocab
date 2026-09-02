@@ -67,8 +67,4 @@ Page({
       this.setData({ saving: false });
     }
   },
-
-  goStats() {
-    wx.navigateTo({ url: '/pages/stats/stats' });
-  },
 });
