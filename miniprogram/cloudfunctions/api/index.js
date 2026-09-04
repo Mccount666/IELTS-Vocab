@@ -311,22 +311,44 @@ async function getSentence(openid, data) {
 
 async function search(openid, data) {
   const query = requireText(data.word, 'word').toLowerCase().slice(0, 80);
-  const lemma = lemmatize(query);
   const examType = String(data.examType || data.exam_type || '').trim();
-  const values = Array.from(new Set([query, lemma]));
-  const where = { _openid: openid, word: _.in(values) };
-  if (examType && examType !== 'All') where.examType = examType;
-  let index = await db.collection('word_index').where(where).limit(200).get();
-  if (!index.data.length && lemma !== query) {
-    const fallback = { _openid: openid, lemma };
-    if (examType && examType !== 'All') fallback.examType = examType;
-    index = await db.collection('word_index').where(fallback).limit(200).get();
+  const isPhrase = query.split(/\s+/).length > 1;
+  let terms = [];
+  let sentences = [];
+
+  if (isPhrase) {
+    // 短语：全部 token 都命中的句子视为短语出现
+    const tokens = Array.from(new Set(tokenizeWords(query).filter((w) => w.length >= 2)));
+    if (tokens.length) {
+      const where = { _openid: openid, word: _.in(tokens) };
+      if (examType && examType !== 'All') where.examType = examType;
+      const rows = await db.collection('word_index').where(where).limit(500).get();
+      const counts = new Map();
+      for (const r of rows.data) counts.set(r.sentenceId, (counts.get(r.sentenceId) || 0) + 1);
+      const ids = [...counts.entries()].filter(([, c]) => c >= tokens.length).map(([id]) => id).slice(0, 50);
+      sentences = ids.length
+        ? (await db.collection('sentences').where({ _openid: openid, _id: _.in(ids) }).limit(50).get()).data
+        : [];
+      terms = tokens;
+    }
+  } else {
+    const lemma = lemmatize(query);
+    terms = Array.from(new Set([query, lemma].filter(Boolean)));
+    const where = { _openid: openid, word: _.in(terms) };
+    if (examType && examType !== 'All') where.examType = examType;
+    let index = await db.collection('word_index').where(where).limit(200).get();
+    if (!index.data.length && lemma !== query) {
+      const fallback = { _openid: openid, lemma };
+      if (examType && examType !== 'All') fallback.examType = examType;
+      index = await db.collection('word_index').where(fallback).limit(200).get();
+    }
+    const sentenceIds = Array.from(new Set(index.data.map((x) => x.sentenceId))).slice(0, 100);
+    sentences = sentenceIds.length
+      ? (await db.collection('sentences').where({ _openid: openid, _id: _.in(sentenceIds) }).limit(100).get()).data
+      : [];
   }
-  const sentenceIds = Array.from(new Set(index.data.map((x) => x.sentenceId))).slice(0, 100);
-  // 批量查句子（原 N+1 串行太慢），并带上来源文档名供前端引用
-  const sentences = sentenceIds.length
-    ? (await db.collection('sentences').where({ _openid: openid, _id: _.in(sentenceIds) }).limit(100).get()).data
-    : [];
+
+  // 来源文档名
   const docIds = Array.from(new Set(sentences.map((s) => s.documentId))).filter(Boolean);
   const nameByDoc = new Map();
   for (const part of chunks(docIds, 90)) {
@@ -336,20 +358,25 @@ async function search(openid, data) {
   for (const s of sentences) s.documentFilename = nameByDoc.get(s.documentId) || '';
   sentences.sort((a, b) => (a.documentId < b.documentId ? -1 : a.documentId > b.documentId ? 1 : a.position - b.position));
   const wb = await db.collection('wordbook').where({ _openid: openid, word: query }).limit(1).get();
-  return { word: query, lemma, sentences, wordbookEntry: wb.data[0] || null };
+  return {
+    word: query,
+    lemma: isPhrase ? '' : lemmatize(query),
+    terms,
+    sentences,
+    wordbookEntry: wb.data[0] || null,
+  };
 }
 
 async function suggest(openid, data) {
   const prefix = requireText(data.prefix, 'prefix').toLowerCase().slice(0, 40);
   const examType = String(data.examType || data.exam_type || '').trim();
-  const where = { _openid: openid };
+  const safe = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = db.RegExp({ regexp: `^${safe}`, options: 'i' });
+  const where = { _openid: openid, word: re };
   if (examType && examType !== 'All') where.examType = examType;
-  const rows = await db.collection('word_index').where(where).limit(500).get();
+  const rows = await db.collection('word_index').where(where).limit(200).get();
   const counts = new Map();
-  for (const row of rows.data) {
-    if (!row.word || (!row.word.startsWith(prefix) && !(row.lemma || '').startsWith(prefix))) continue;
-    counts.set(row.word, (counts.get(row.word) || 0) + 1);
-  }
+  for (const row of rows.data) counts.set(row.word, (counts.get(row.word) || 0) + 1);
   const suggestions = Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 8)
@@ -606,7 +633,7 @@ async function dictionaryLookup(openid, data) {
     const c = cached.data[0];
     return { word, phonetic: c.phonetic, translation: c.translation, definition: c.definition, examples: JSON.parse(c.examples || '[]'), source: c.source, cached: true };
   }
-  const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { timeout: 8000 }).catch(() => null);
+  const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { timeout: 2000 }).catch(() => null);
   const arr = resp && resp.ok ? await resp.json().catch(() => null) : null;
   if (!Array.isArray(arr) || !arr.length) return { word, translation: '', definition: '', examples: [], source: '', cached: false, notFound: true };
   const e = arr[0];

@@ -25,12 +25,17 @@ Page({
       const me = await api.initUser();
       const settings = await api.getSettings();
       const protocolIndex = Math.max(0, protocols.findIndex((p) => p.value === (settings.llmProtocol || 'openai')));
-      this.setData({
+      const patch = {
         user: me.user || { isAdmin: false },
         settings,
         protocolIndex,
-        form: { ...this.data.form, llmBaseUrl: settings.llmBaseUrl || '', llmModel: settings.llmModel || '' },
-      });
+      };
+      // 首次才把服务端值灌进表单：避免切 tab 回来覆盖用户正在编辑的内容
+      if (!this._formLoaded) {
+        patch.form = { ...this.data.form, llmBaseUrl: settings.llmBaseUrl || '', llmModel: settings.llmModel || '' };
+        this._formLoaded = true;
+      }
+      this.setData(patch);
     } catch (err) {
       toast(err.message || '加载失败');
     }

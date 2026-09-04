@@ -21,12 +21,13 @@ function loadHistory() {
   }
 }
 
-// 把例句拆成 {t, hl} 片段：命中目标词/词形的片段高亮
-function highlightParts(text, word, lemma) {
+// 把例句拆成 {t, hl} 片段：命中目标词/词形/短语 token 的片段高亮
+function highlightParts(text, terms, lemma) {
+  const set = new Set((terms || []).filter(Boolean));
   const parts = String(text || '').split(/([^A-Za-z']+)/).filter((s) => s !== '');
   return parts.map((t) => {
     const low = t.toLowerCase();
-    const hl = low === word || low === lemma || lemmatize(low) === lemma;
+    const hl = set.has(low) || (lemma && lemmatize(low) === lemma);
     return { t, hl };
   });
 }
@@ -47,6 +48,7 @@ Page({
     dictLoading: false,
     dictMode: '',
     translations: {},
+    nearWords: [],
   },
 
   onLoad() {
@@ -111,14 +113,22 @@ Page({
     try {
       const examType = examTypes[this.data.examIndex].value;
       const result = await api.search({ word, examType });
+      const terms = result.terms && result.terms.length ? result.terms : [result.word, result.lemma];
       const sentenceViews = (result.sentences || []).map((s) => ({
         ...s,
-        parts: highlightParts(s.text, result.word, result.lemma),
+        parts: highlightParts(s.text, terms, result.lemma),
         sourceLabel: s.documentFilename ? `${s.documentFilename} · 位置 ${s.position + 1}` : `位置 ${s.position + 1}`,
       }));
-      this.setData({ result, sentences: result.sentences || [], sentenceViews });
+      this.setData({ result, sentences: result.sentences || [], sentenceViews, nearWords: [] });
       this.pushHistory(word);
       this.loadDict(word);
+      // 查不到例句时，用真题词表推荐相近词
+      if (!result.sentences || !result.sentences.length) {
+        try {
+          const near = await api.suggest({ prefix: word.slice(0, Math.max(2, word.length)), examType });
+          this.setData({ nearWords: (near.suggestions || []).filter((s) => s.word !== word).slice(0, 6) });
+        } catch (err) { /* 静默，不影响主流程 */ }
+      }
     } catch (err) {
       toast(err.message || '查询失败');
     } finally {
@@ -126,19 +136,30 @@ Page({
     }
   },
 
-  // 释义卡：优先免费词典（无需 Key），LLM 释义按需点按钮
+  // 释义卡：先免费词典；未命中且有 LLM Key 时自动 AI 释义，都失败留按钮
   async loadDict(word) {
     this.setData({ dictLoading: true, dict: null, dictMode: '' });
+    let dict = null;
+    let mode = '';
     try {
-      const dict = await api.dictionaryLookup({ word });
-      if (dict && !dict.notFound) {
-        this.setData({ dict, dictMode: 'free' });
+      const free = await api.dictionaryLookup({ word });
+      if (free && !free.notFound) {
+        dict = free;
+        mode = 'free';
       }
     } catch (err) {
-      console.warn(err);
-    } finally {
-      this.setData({ dictLoading: false });
+      console.warn('free dict failed:', err.errMsg || err.message);
     }
+    if (!dict) {
+      try {
+        const ai = await api.llmDefine({ word });
+        dict = ai;
+        mode = 'llm';
+      } catch (err) {
+        console.warn('ai define unavailable:', err.errMsg || err.message);
+      }
+    }
+    this.setData({ dict, dictMode: mode, dictLoading: false });
   },
 
   async aiDefine() {

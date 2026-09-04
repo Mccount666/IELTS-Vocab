@@ -2,7 +2,7 @@
   <view class="card stack search-card">
     <view class="section-title">查一个单词</view>
     <view class="search-row">
-      <input class="input search-input" placeholder="例如 environment" value="{{word}}" confirm-type="search" bindinput="onWordInput" bindconfirm="submit" />
+      <input class="input search-input" maxlength="80" placeholder="例如 environment" value="{{word}}" confirm-type="search" bindinput="onWordInput" bindconfirm="submit" />
       <view class="btn primary search-btn" hover-class="btn-hover" bindtap="submit">查</view>
     </view>
     <picker mode="selector" range="{{examTypes}}" range-key="label" value="{{examIndex}}" bindchange="onExamChange">
@@ -48,7 +48,7 @@
       </view>
     </view>
     <view class="muted center" wx:elif="{{dictLoading}}">释义加载中…</view>
-    <view class="muted center" wx:elif="{{dictMode !== 'llm'}}">免费词典暂无此词，可点上方 AI 释义</view>
+    <view class="btn secondary ai-fallback" hover-class="btn-hover" wx:elif="{{!dictLoading && !dict}}" bindtap="aiDefine">AI 释义</view>
   </view>
 
   <view class="stack" wx:if="{{sentenceViews.length}}">
@@ -69,5 +69,11 @@
   <view class="card empty" wx:elif="{{searched && !loading}}">
     <view class="section-title">还没有例句</view>
     <view class="muted">请先在“导入”页粘贴真题文本，再回来查词。</view>
+    <view class="stack" wx:if="{{nearWords.length}}" style="margin-top: 24rpx; text-align: left;">
+      <view class="muted">真题里的相近词：</view>
+      <view class="chip-row" style="margin-top: 14rpx;">
+        <view class="chip" wx:for="{{nearWords}}" wx:key="word" data-word="{{item.word}}" bindtap="pickSuggestion">{{item.word}}</view>
+      </view>
+    </view>
   </view>
 </view>
