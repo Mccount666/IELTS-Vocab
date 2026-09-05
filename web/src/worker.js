@@ -42,6 +42,10 @@ const USER_SETTING_KEYS = new Set([
 const AUTH_RATE_LIMIT = 30;
 const AUTH_RATE_WINDOW_MIN = 15;
 
+// 占位密码哈希：登录时对不存在的用户也执行一次等价 PBKDF2，拉平响应时间
+// （格式与 auth.js hashPassword 一致：pbkdf2:迭代:16字节盐b64:32字节哈希b64）
+const DUMMY_PASSWORD_HASH = `pbkdf2:100000:${"A".repeat(22)}==:${"A".repeat(43)}=`;
+
 // ---------------------------------------------------------------------------
 
 // 统一安全响应头：nosniff 防 MIME 嗅探、禁 iframe 内嵌、限制 Referrer 外泄
@@ -221,6 +225,8 @@ async function handleApi(request, env, url) {
     const body = await request.json().catch(() => ({}));
     const sentences = Array.isArray(body.sentences) ? body.sentences : [];
     if (!sentences.length) return json({ inserted: 0 });
+    // 前端按 400 句/请求分块上传，这里兜底拒绝超大载荷，防止单请求打爆 CPU
+    if (sentences.length > 500) throw new HttpError(400, "单次最多提交 500 个句子");
     return json(await appendSentences(env, user.id, docId, sentences));
   }
 
@@ -735,8 +741,13 @@ async function login(request, env) {
     .prepare("SELECT id, username, is_admin, password_hash FROM users WHERE username = ?")
     .bind(username)
     .first();
-  // 用户不存在与密码错误返回同一句话，不泄露用户名是否存在
-  if (!row || !(await verifyPassword(password, row.password_hash))) {
+  // 用户不存在与密码错误返回同一句话，不泄露用户名是否存在；
+  // 对不存在的用户也跑一次同代价的哈希验证，避免响应时间差绕过文案层面的一致性
+  if (!row) {
+    await verifyPassword(password, DUMMY_PASSWORD_HASH);
+    throw new HttpError(401, "用户名或密码错误");
+  }
+  if (!(await verifyPassword(password, row.password_hash))) {
     throw new HttpError(401, "用户名或密码错误");
   }
   const token = await createSession(env, row.id);
@@ -760,8 +771,11 @@ async function appendSentences(env, userId, docId, sentences) {
 
   const clean = sentences
     .map((s) => ({
-      text: String(s?.text ?? "").trim(),
-      tokens: Array.isArray(s?.tokens) ? s.tokens.map((t) => String(t).toLowerCase()) : [],
+      // 文本与词元做长度截断：合法分句结果远达不到上限，防异常载荷撑爆行体积
+      text: String(s?.text ?? "").trim().slice(0, 4000),
+      tokens: Array.isArray(s?.tokens)
+        ? s.tokens.slice(0, 400).map((t) => String(t).toLowerCase().slice(0, 64))
+        : [],
     }))
     .filter((s) => s.text);
   if (!clean.length) return { inserted: 0, start: 0 };
@@ -860,6 +874,10 @@ async function deleteDocument(env, userId, docId) {
   for (const c of chunks(sids, IN_CHUNK)) {
     const qs = c.map(() => "?").join(",");
     await env.DB.prepare(`DELETE FROM word_sentences WHERE sentence_id IN (${qs})`).bind(...c).run();
+    // 生词本收藏的例句随文档删除，悬空引用一并置空（LEFT JOIN 时不再查空气行）
+    await env.DB.prepare(`UPDATE wordbook SET sentence_id = NULL WHERE user_id = ? AND sentence_id IN (${qs})`)
+      .bind(userId, ...c)
+      .run();
   }
   await env.DB.prepare("DELETE FROM sentences WHERE document_id = ?").bind(docId).run();
   await env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(docId).run();
