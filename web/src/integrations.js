@@ -52,8 +52,13 @@ export async function lookupOnline(word) {
 // ---------------------------------------------------------------------------
 
 export function llmDefaults(settings) {
+  const baseUrl = (settings.llm_base_url || "https://api.openai.com/v1").replace(/\/+$/, "");
+  // 只允许 https 且拒绝内网/云元数据地址，防止把 Worker 当 SSRF 跳板
+  if (!/^https:\/\/(?!localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[?::1\]?)/i.test(baseUrl)) {
+    throw new HttpError(400, "LLM Base URL 必须是 https:// 开头的公网地址");
+  }
   return {
-    baseUrl: (settings.llm_base_url || "https://api.openai.com/v1").replace(/\/+$/, ""),
+    baseUrl,
     apiKey: settings.llm_api_key || "",
     model: settings.llm_model || "gpt-4o-mini",
   };

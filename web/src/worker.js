@@ -40,11 +40,19 @@ const USER_SETTING_KEYS = new Set([
 
 // ---------------------------------------------------------------------------
 
+// 统一安全响应头：nosniff 防 MIME 嗅探、禁 iframe 内嵌、限制 Referrer 外泄
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+};
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/api/")) {
-      return env.ASSETS.fetch(request);
+      const resp = await env.ASSETS.fetch(request);
+      return new Response(resp.body, { status: resp.status, headers: mergeHeaders(resp.headers, SECURITY_HEADERS) });
     }
     try {
       return await handleApi(request, env, url);
@@ -56,10 +64,16 @@ export default {
   },
 };
 
+function mergeHeaders(base, extra) {
+  const h = new Headers(base);
+  for (const [k, v] of Object.entries(extra)) h.set(k, v);
+  return h;
+}
+
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...headers },
+    headers: { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS, ...headers },
   });
 }
 
@@ -250,8 +264,8 @@ async function handleApi(request, env, url) {
     let where = "s.document_id = ?";
     const binds = [docId];
     if (q) {
-      where += " AND s.text LIKE ?";
-      binds.push(`%${q}%`);
+      where += " AND s.text LIKE ? ESCAPE '\\'";
+      binds.push(`%${q.replace(/[\\%_]/g, (ch) => "\\" + ch)}%`);
     }
     const totalRow = await env.DB
       .prepare(`SELECT COUNT(*) AS n FROM sentences s WHERE ${where}`)
@@ -337,9 +351,9 @@ async function handleApi(request, env, url) {
       `INSERT INTO wordbook (user_id, word, phonetic, translation, definition, sentence_id, added_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id, word) DO UPDATE SET
-         phonetic = excluded.phonetic,
-         translation = excluded.translation,
-         definition = excluded.definition,
+         phonetic = CASE WHEN excluded.phonetic != '' THEN excluded.phonetic ELSE wordbook.phonetic END,
+         translation = CASE WHEN excluded.translation != '' THEN excluded.translation ELSE wordbook.translation END,
+         definition = CASE WHEN excluded.definition != '' THEN excluded.definition ELSE wordbook.definition END,
          sentence_id = COALESCE(excluded.sentence_id, wordbook.sentence_id),
          added_at = excluded.added_at`
     )
@@ -392,9 +406,9 @@ async function handleApi(request, env, url) {
             `INSERT INTO wordbook (user_id, word, phonetic, translation, definition, sentence_id, added_at, familiarity, last_reviewed_at, next_review_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(user_id, word) DO UPDATE SET
-               phonetic = excluded.phonetic,
-               translation = excluded.translation,
-               definition = excluded.definition,
+               phonetic = CASE WHEN excluded.phonetic != '' THEN excluded.phonetic ELSE wordbook.phonetic END,
+               translation = CASE WHEN excluded.translation != '' THEN excluded.translation ELSE wordbook.translation END,
+               definition = CASE WHEN excluded.definition != '' THEN excluded.definition ELSE wordbook.definition END,
                sentence_id = COALESCE(excluded.sentence_id, wordbook.sentence_id),
                added_at = excluded.added_at,
                familiarity = excluded.familiarity,
@@ -584,7 +598,7 @@ async function handleApi(request, env, url) {
     const upstream = await fetch(target, { signal: AbortSignal.timeout(120000) });
     if (!upstream.ok) throw new HttpError(502, `MinerU 结果下载失败：HTTP ${upstream.status}`);
     return new Response(upstream.body, {
-      headers: { "Content-Type": "application/octet-stream" },
+      headers: { "Content-Type": "application/octet-stream", "X-Content-Type-Options": "nosniff" },
     });
   }
 
@@ -630,6 +644,7 @@ async function handleApi(request, env, url) {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Disposition": `attachment; filename="ielts-vocab-backup-${stamp}.json"`,
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }
@@ -906,13 +921,14 @@ async function searchWord(env, userId, rawWord, examType) {
 }
 
 async function findSentencesByLemmaPrefix(env, userId, word, examType) {
-  const pattern = `${word}%`;
+  // 词干来自用户输入，先转义 LIKE 通配符（搜 100% 不该变成通配查询）
+  const pattern = `${word.replace(/[\\%_]/g, (ch) => "\\" + ch)}%`;
   const sql = `SELECT DISTINCT s.id, s.text, s.document_id, s.position, d.filename, d.exam_type
     FROM words w
     JOIN word_sentences ws ON ws.word_id = w.id
     JOIN sentences s ON s.id = ws.sentence_id
     JOIN documents d ON d.id = s.document_id
-    WHERE (w.lemma LIKE ? OR w.word LIKE ?) AND w.word != ? AND d.user_id = ?${examFilterSql(examType)}
+    WHERE (w.lemma LIKE ? ESCAPE '\\' OR w.word LIKE ? ESCAPE '\\') AND w.word != ? AND d.user_id = ?${examFilterSql(examType)}
     ORDER BY d.exam_type, s.document_id, s.position
     LIMIT ${SENTENCE_LIMIT}`;
   const bind = examType ? [pattern, pattern, word, userId, examType] : [pattern, pattern, word, userId];

@@ -522,6 +522,10 @@ function llmProtocol(settings) {
 
 function buildLlmRequest(settings, system, user) {
   const baseUrl = String(settings.llmBaseUrl || '').replace(/\/+$/, '');
+  // 只允许 https 且拒绝内网/云元数据地址，防止把云函数当 SSRF 跳板
+  if (!/^https:\/\/(?!localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[?::1\]?)/i.test(baseUrl)) {
+    throw Object.assign(new Error('LLM Base URL 必须是 https:// 开头的公网地址'), { statusCode: 400 });
+  }
   const model = settings.llmModel || (llmProtocol(settings) === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini');
   const key = settings.llmApiKey || '';
   if (llmProtocol(settings) === 'anthropic') {

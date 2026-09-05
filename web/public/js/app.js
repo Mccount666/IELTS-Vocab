@@ -314,6 +314,7 @@ $("#tabs").addEventListener("click", (e) => {
 // 会话内查询缓存：同一词 + 同一考试筛选不重复请求（服务端还有 D1 级 dictionary_cache）
 const searchCache = new Map();
 const SEARCH_CACHE_MAX = 200;
+let searchSeq = 0; // 请求序号：响应乱序到达时旧结果直接丢弃，不覆盖新查询的渲染
 
 function renderChips() {
   const box = $("#exam-chips");
@@ -407,6 +408,7 @@ function renderSkeleton() {
 
 async function doSearch(word, immediate = false) {
   word = word.trim();
+  const seq = ++searchSeq;
   if (!word) {
     state.currentWord = "";
     renderWelcome();
@@ -426,12 +428,14 @@ async function doSearch(word, immediate = false) {
     const params = new URLSearchParams({ word });
     if (state.examFilter) params.set("exam_type", state.examFilter);
     const data = await api(`/api/search?${params}`);
+    if (seq !== searchSeq) return; // 期间用户又发起了别的查询，丢弃过期响应
     state.lastResult = data;
     if (searchCache.size >= SEARCH_CACHE_MAX) searchCache.clear();
     searchCache.set(key, data);
     pushRecentWord(word);
     renderSearchResult(word, data);
   } catch (e) {
+    if (seq !== searchSeq) return;
     $("#search-results").innerHTML = `<div class="hint-block">查询失败：${escapeHtml(e.message)}</div>`;
   }
 }
@@ -868,6 +872,7 @@ $("#search-input").addEventListener("keydown", (e) => {
     e.target.value = "";
     e.target.blur();
     clearTimeout(state.debounceTimer);
+    searchSeq += 1; // 作废在途查询，防止欢迎页被迟到的旧结果顶掉
     state.currentWord = "";
     renderWelcome();
   }
