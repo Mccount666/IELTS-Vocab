@@ -72,7 +72,8 @@ function highlightHtml(text, terms) {
   const escaped = escapeHtml(text);
   const valid = [...new Set(terms.filter(Boolean))].sort((a, b) => b.length - a.length);
   if (!valid.length) return escaped;
-  const re = new RegExp(`(${valid.map(escapeRegExp).join("|")})`, "gi");
+  // 词表也按正文同样的方式转义（' → &#39; 等），否则 don't 这类缩写在转义后的文本里永远匹配不上
+  const re = new RegExp(`(${valid.map((t) => escapeRegExp(escapeHtml(t))).join("|")})`, "gi");
   return escaped.replace(re, "<mark>$1</mark>");
 }
 
@@ -1837,7 +1838,7 @@ function clozeHtml(sentence, word) {
   const escaped = escapeHtml(sentence);
   const valid = [...new Set(terms.filter(Boolean))].sort((a, b) => b.length - a.length);
   if (!valid.length) return escaped;
-  const re = new RegExp(`\\b(${valid.map(escapeRegExp).join("|")})\\b`, "gi");
+  const re = new RegExp(`\\b(${valid.map((t) => escapeRegExp(escapeHtml(t))).join("|")})\\b`, "gi");
   return escaped.replace(re, '<span class="cloze-blank"></span>');
 }
 
@@ -1887,6 +1888,7 @@ function revealReviewCard() {
   const w = review.queue[review.idx];
   review.revealed = true;
   $("#review-hint").hidden = true;
+  $("#review-cloze-hint").hidden = true; // 答案已揭晓，提示按钮没意义了，一并收起
   $("#review-word-row").hidden = false;
   $("#review-word").textContent = w.word;
   $("#review-cloze").hidden = true;

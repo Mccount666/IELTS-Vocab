@@ -38,6 +38,10 @@ const USER_SETTING_KEYS = new Set([
   "mineru_api_token",
 ]);
 
+// 登录/注册限速：每 IP 在窗口期内最多 AUTH_RATE_LIMIT 次认证请求（防对站长账号的暴力破解）
+const AUTH_RATE_LIMIT = 30;
+const AUTH_RATE_WINDOW_MIN = 15;
+
 // ---------------------------------------------------------------------------
 
 // 统一安全响应头：nosniff 防 MIME 嗅探、禁 iframe 内嵌、限制 Referrer 外泄
@@ -657,7 +661,26 @@ async function handleApi(request, env, url) {
 // 认证路由
 // ---------------------------------------------------------------------------
 
+// 认证请求限速：记一条本次请求 + 顺手清理 1 小时前的旧记录，超限直接 429
+async function authRateLimit(env, request) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const windowStart = new Date(Date.now() - AUTH_RATE_WINDOW_MIN * 60000).toISOString().replace("T", " ").slice(0, 19);
+  const row = await env.DB
+    .prepare("SELECT COUNT(*) AS n FROM auth_attempts WHERE ip = ? AND attempted_at >= ?")
+    .bind(ip, windowStart)
+    .first();
+  if ((row?.n || 0) >= AUTH_RATE_LIMIT) {
+    throw new HttpError(429, `尝试过于频繁，请 ${AUTH_RATE_WINDOW_MIN} 分钟后再试`);
+  }
+  const staleBefore = new Date(Date.now() - 3600_000).toISOString().replace("T", " ").slice(0, 19);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO auth_attempts (ip, attempted_at) VALUES (?, ?)").bind(ip, nowIso()),
+    env.DB.prepare("DELETE FROM auth_attempts WHERE attempted_at < ?").bind(staleBefore),
+  ]);
+}
+
 async function register(request, env) {
+  await authRateLimit(env, request);
   const body = await request.json().catch(() => ({}));
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
@@ -704,6 +727,7 @@ async function register(request, env) {
 }
 
 async function login(request, env) {
+  await authRateLimit(env, request);
   const body = await request.json().catch(() => ({}));
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
