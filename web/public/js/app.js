@@ -1776,7 +1776,7 @@ try {
   const saved = localStorage.getItem(REVIEW_SCOPE_KEY);
   if (saved === "all" || saved === "due" || saved === "weak") $("#review-scope").value = saved;
   const savedMode = localStorage.getItem(REVIEW_MODE_KEY);
-  if (savedMode === "word" || savedMode === "cloze") $("#review-mode").value = savedMode;
+  if (savedMode === "word" || savedMode === "cloze" || savedMode === "reverse") $("#review-mode").value = savedMode;
 } catch {}
 
 $("#review-mode").addEventListener("change", () => {
@@ -1821,7 +1821,7 @@ function startReview() {
   review.idx = 0;
   review.total = review.queue.length;
   review.done = false;
-  review.mode = $("#review-mode").value === "cloze" ? "cloze" : "word";
+  review.mode = ["cloze", "reverse"].includes($("#review-mode").value) ? $("#review-mode").value : "word";
   review.stats = { know: 0, fuzzy: 0, forget: 0 };
   review.open = true;
   $("#review-overlay").hidden = false;
@@ -1847,20 +1847,38 @@ function renderReviewCard() {
   $("#review-progress").textContent = `${review.idx + 1} / ${review.total}`;
   $("#review-bar-fill").style.width = `${Math.round((review.idx / review.total) * 100)}%`;
   const useCloze = review.mode === "cloze" && Boolean(w.sentence_text);
-  $("#review-word-row").hidden = useCloze;
+  // 看义忆词：释义先行露出，翻面才给单词；没有任何释义的词退回看词模式
+  const useReverse = review.mode === "reverse" && Boolean(w.translation || w.definition);
   const clozeEl = $("#review-cloze");
   const hintBtn = $("#review-cloze-hint");
+  const ansEl = $("#review-answer");
   if (useCloze) {
+    $("#review-word-row").hidden = true;
     clozeEl.innerHTML = clozeHtml(w.sentence_text, w.word);
     clozeEl.hidden = false;
     $("#review-hint").textContent = "回想空格处的单词，然后按空格或点击卡片显示答案";
+    ansEl.hidden = true;
+  } else if (useReverse) {
+    $("#review-word-row").hidden = true;
+    clozeEl.hidden = true;
+    // 提示区（#review-answer）提前可见，但只给释义；音标和例句翻面才出现
+    $("#review-translation").textContent = w.translation || "";
+    $("#review-translation").hidden = !w.translation;
+    $("#review-definition").textContent = w.definition || "";
+    $("#review-definition").hidden = !w.definition;
+    $("#review-phonetic").hidden = true;
+    $("#review-sentence").hidden = true;
+    ansEl.hidden = false;
+    $("#review-hint").textContent = "看释义回想对应的英文单词，然后按空格显示答案";
   } else {
+    $("#review-word-row").hidden = false;
     clozeEl.hidden = true;
     $("#review-word").textContent = w.word;
     $("#review-hint").textContent = "回想释义，然后按空格或点击卡片显示答案";
+    ansEl.hidden = true;
   }
-  hintBtn.hidden = true; // 每张卡重新来，点过提示不延续到下一张
-  $("#review-answer").hidden = true;
+  // 填空/看义忆词有提示价值才亮出「想不起来？给我提示」（每张卡重新来）
+  hintBtn.hidden = !(useCloze || useReverse);
   $("#review-grade").hidden = true;
 }
 
@@ -1958,13 +1976,15 @@ $("#review-speak").addEventListener("click", (e) => {
   speak(review.queue[review.idx]?.word || "");
 });
 // 例句填空的提示：优先给中文释义，没有释义给首字母 + 词长（不触发翻面）
+// 提示按钮：填空模式优先给中文释义（没有则首字母）；看义忆词模式释义已可见，给首字母
 $("#review-cloze-hint").addEventListener("click", (e) => {
   e.stopPropagation();
   const w = review.queue[review.idx];
   if (!w) return;
-  $("#review-hint").textContent = w.translation
-    ? `提示：${w.translation}`
-    : `提示：首字母 ${w.word.slice(0, 1).toUpperCase()}…，共 ${w.word.length} 个字母`;
+  $("#review-hint").textContent =
+    review.mode === "reverse" || !w.translation
+      ? `提示：首字母 ${w.word.slice(0, 1).toUpperCase()}…，共 ${w.word.length} 个字母`
+      : `提示：${w.translation}`;
   e.currentTarget.hidden = true;
 });
 document.querySelectorAll("#review-grade .grade-btn").forEach((btn) => {
@@ -1987,8 +2007,10 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "1") gradeReviewCard("forget");
   else if (e.key === "2") gradeReviewCard("fuzzy");
   else if (e.key === "3") gradeReviewCard("know");
-  else if (e.key.toLowerCase() === "r") speak(review.queue[review.idx]?.word || "");
-  else if (e.key === "Escape") closeReview();
+  else if (e.key.toLowerCase() === "r") {
+    // 看义忆词翻面前朗读会把答案念出来，禁止剧透
+    if (!(review.mode === "reverse" && !review.revealed)) speak(review.queue[review.idx]?.word || "");
+  } else if (e.key === "Escape") closeReview();
 });
 
 function downloadFile(content, filename, mime) {

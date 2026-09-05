@@ -93,7 +93,7 @@
       <div class="search-hero">
         <div class="search-bar" id="search-bar">
           <svg viewBox="0 0 24 24" class="search-icon"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
-          <input id="search-input" type="text" placeholder="输入单词或短语，例如 abandon / look forward to" autocomplete="off" spellcheck="false">
+          <input id="search-input" type="text" placeholder="输入单词 / 短语 / 中文释义，例如 abandon / look forward to / 放弃" autocomplete="off" spellcheck="false">
           <button id="search-btn" class="btn btn-primary">查询</button>
           <div class="search-suggest" id="suggest-box" hidden></div>
         </div>
@@ -179,6 +179,7 @@
           <select id="review-mode" class="select select-sm" title="选择复习模式">
             <option value="word">模式：看词回忆</option>
             <option value="cloze">模式：例句填空</option>
+            <option value="reverse">模式：看义忆词</option>
           </select>
           <button class="btn btn-ghost" id="review-btn">开始复习</button>
           <button class="btn btn-ghost" id="export-csv">导出 CSV</button>
