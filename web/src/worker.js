@@ -710,10 +710,17 @@ async function register(request, env) {
   const dup = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(username).first();
   if (dup) throw new HttpError(409, "用户名已被占用");
 
-  const result = await env.DB
-    .prepare("INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)")
-    .bind(username, await hashPassword(password), isFirst ? 1 : 0, nowIso())
-    .run();
+  let result;
+  try {
+    result = await env.DB
+      .prepare("INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)")
+      .bind(username, await hashPassword(password), isFirst ? 1 : 0, nowIso())
+      .run();
+  } catch (e) {
+    // 并发注册同一用户名时 dup 查重拦不住，UNIQUE 约束兜底；别把数据库报错原文当 500 漏出去
+    if (String(e?.message || "").includes("UNIQUE")) throw new HttpError(409, "用户名已被占用");
+    throw e;
+  }
   const userId = result.meta.last_row_id;
 
   // 首个注册 = 站长，认领多用户改造前的历史数据与配置
@@ -827,13 +834,6 @@ async function appendSentences(env, userId, docId, sentences) {
   };
   await selectIds(wordList);
   const missing = wordList.filter((w) => !wordIds.has(w));
-  for (const c of chunks(missing, BATCH_CHUNK)) {
-    await env.DB.batch(
-      c.map((w) =>
-        env.DB.prepare("INSERT INTO words (word, lemma) VALUES (?, ?)").bind(w, wordMap.get(w))
-      )
-    );
-  }
   if (missing.length) {
     // OR IGNORE：词表全局共享（word UNIQUE），与其他用户/标签页并发导入撞上同一个新词时，
     // 不让 UNIQUE 冲突把整次导入打挂；被忽略的词随后回查拿到对方插入的 id

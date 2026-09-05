@@ -91,6 +91,8 @@ function selectedEnglishWord() {
 
 function bindDblClickSearch(el) {
   if (!el) return;
+  if (el.dataset.dblBound) return; // 文档预览"加载更多"会重复调用，别给同一容器叠监听器
+  el.dataset.dblBound = "1";
   el.title = "双击句中单词可直接查询";
   el.addEventListener("dblclick", () => {
     const w = selectedEnglishWord();
