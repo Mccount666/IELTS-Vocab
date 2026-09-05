@@ -81,7 +81,8 @@ function mergeHeaders(base, extra) {
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...SECURITY_HEADERS, ...headers },
+    // no-store：API 响应带会话数据，禁止浏览器/中间层缓存（静态资源走 SW 自己的策略，不受影响）
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...SECURITY_HEADERS, ...headers },
   });
 }
 
@@ -833,7 +834,18 @@ async function appendSentences(env, userId, docId, sentences) {
       )
     );
   }
-  if (missing.length) await selectIds(missing);
+  if (missing.length) {
+    // OR IGNORE：词表全局共享（word UNIQUE），与其他用户/标签页并发导入撞上同一个新词时，
+    // 不让 UNIQUE 冲突把整次导入打挂；被忽略的词随后回查拿到对方插入的 id
+    for (const c of chunks(missing, BATCH_CHUNK)) {
+      await env.DB.batch(
+        c.map((w) =>
+          env.DB.prepare("INSERT OR IGNORE INTO words (word, lemma) VALUES (?, ?)").bind(w, wordMap.get(w))
+        )
+      );
+    }
+    await selectIds(missing);
+  }
 
   // 4) 倒排索引
   const pairs = [];
