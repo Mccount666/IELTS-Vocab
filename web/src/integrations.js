@@ -52,16 +52,47 @@ export async function lookupOnline(word) {
 // ---------------------------------------------------------------------------
 
 export function llmDefaults(settings) {
-  const baseUrl = (settings.llm_base_url || "https://api.openai.com/v1").replace(/\/+$/, "");
-  // 只允许 https 且拒绝内网/云元数据地址，防止把 Worker 当 SSRF 跳板
-  if (!/^https:\/\/(?!localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[?::1\]?)/i.test(baseUrl)) {
+  const raw = (settings.llm_base_url || "https://api.openai.com/v1").replace(/\/+$/, "");
+  let u;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new HttpError(400, "LLM Base URL 必须是 https:// 开头的公网地址");
+  }
+  // 拒绝内网/云元数据地址，防止把 Worker 当 SSRF 跳板。
+  // 必须对 URL 解析后的 hostname 判断，不能对原始字符串做正则：
+  // 0x7f000001、127.1 这类缩写形式会被 URL 解析器规范化成点分十进制，字符串正则拦不住。
+  if (u.protocol !== "https:" || isPrivateHost(u.hostname)) {
     throw new HttpError(400, "LLM Base URL 必须是 https:// 开头的公网地址");
   }
   return {
-    baseUrl,
+    baseUrl: raw,
     apiKey: settings.llm_api_key || "",
     model: settings.llm_model || "gpt-4o-mini",
   };
+}
+
+// hostname 是否为内网/保留地址（含 IPv4 十进制、IPv6 回环/ULA/链路本地、.internal 等）
+function isPrivateHost(hostname) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) || // CGNAT 100.64/10
+      (a === 169 && b === 254) || // 链路本地（含云元数据 169.254.169.254）
+      (a === 172 && b >= 16 && b <= 31) || // 172.16/12
+      (a === 192 && b === 168) // 192.168/16
+    );
+  }
+  if (host.includes(":")) {
+    // IPv6（URL.hostname 的方括号已剥掉）：回环/未指定/IPv4 映射/ULA fc00::/7/链路本地 fe80::/10
+    return host === "::1" || host.startsWith("::") || /^f[cd]/.test(host) || /^fe[89ab]/.test(host);
+  }
+  return host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local");
 }
 
 async function llmChat(settings, messages, jsonMode = false) {

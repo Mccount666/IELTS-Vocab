@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS documents (
     user_id INTEGER NOT NULL DEFAULT 0,
     filename TEXT NOT NULL,
     exam_type TEXT NOT NULL,
-    imported_at TEXT NOT NULL
+    imported_at TEXT NOT NULL,
+    -- 句子位置计数器：appendSentences 用 UPDATE ... RETURNING 原子预分配 position 区间（005）
+    next_pos INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
 

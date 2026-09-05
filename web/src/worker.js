@@ -586,8 +586,14 @@ async function handleApi(request, env, url) {
   }
 
   if (pathname === "/api/mineru/upload" && method === "POST") {
+    // 与 upload-urls 同样要求已配置 Token：该接口是登录用户可用的 PUT 中继，
+    // 白名单含 *.aliyuncs.com，不设 Token 门槛会被当成向任意 OSS 地址写数据的跳板
+    const settings = await getUserSettings(env, user.id);
+    if (!settings.mineru_api_token) throw new HttpError(400, "尚未配置 MinerU API Token，请到「设置」页填写");
     const target = url.searchParams.get("url") || "";
     if (!isMineruDownloadUrlAllowed(target)) throw new HttpError(400, "上传地址不在 MinerU 允许的域名内");
+    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    if (contentLength > 200 * 1024 * 1024) throw new HttpError(413, "文件过大（上限 200MB）");
     const upstream = await fetch(target, {
       method: "PUT",
       body: request.body,
@@ -771,12 +777,6 @@ async function login(request, env) {
 // ---------------------------------------------------------------------------
 
 async function appendSentences(env, userId, docId, sentences) {
-  const doc = await env.DB
-    .prepare("SELECT id FROM documents WHERE id = ? AND user_id = ?")
-    .bind(docId, userId)
-    .first();
-  if (!doc) throw new HttpError(404, "文档不存在（可能尚未创建、已被删除或不属于你）");
-
   const clean = sentences
     .map((s) => ({
       // 文本与词元做长度截断：合法分句结果远达不到上限，防异常载荷撑爆行体积
@@ -788,12 +788,15 @@ async function appendSentences(env, userId, docId, sentences) {
     .filter((s) => s.text);
   if (!clean.length) return { inserted: 0, start: 0 };
 
-  const maxRow = await env.DB.prepare(
-    "SELECT COALESCE(MAX(position), -1) AS m FROM sentences WHERE document_id = ?"
-  )
-    .bind(docId)
+  // 原子预分配 position 区间：UPDATE ... RETURNING 一条语句内完成计数与分配，
+  // 并发追加同一文档不会拿到重叠区间（先读 MAX 再写会撞出重复 position）
+  const reserved = await env.DB
+    .prepare("UPDATE documents SET next_pos = next_pos + ? WHERE id = ? AND user_id = ? RETURNING next_pos")
+    .bind(clean.length, docId, userId)
     .first();
-  const start = maxRow.m + 1;
+  if (!reserved) throw new HttpError(404, "文档不存在（可能尚未创建、已被删除或不属于你）");
+  const end = reserved.next_pos;
+  const start = end - clean.length;
 
   // 1) 插入句子
   for (const c of chunks(clean, BATCH_CHUNK)) {
