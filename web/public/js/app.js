@@ -446,6 +446,34 @@ function renderSearchResult(word, data) {
 
   if (data.definition) box.appendChild(buildDefCard(data.definition));
 
+  // 中文反查：顶部给候选词 chips（点词即查），例句按命中词分别高亮
+  if (data.reverse) {
+    const reverse = data.reverse;
+    const head = document.createElement("div");
+    head.className = "result-title";
+    head.innerHTML = `中文反查「<span class="count">${escapeHtml(reverse.term)}</span>」`;
+    box.appendChild(head);
+    if (reverse.words.length) {
+      const chips = document.createElement("div");
+      chips.className = "similar-row";
+      chips.innerHTML =
+        `<span class="recent-label">释义含该词的 ${reverse.words.length} 个词</span>` +
+        reverse.words
+          .map(
+            (w) =>
+              `<button class="sample-word" data-w="${escapeHtml(w.word)}" title="${escapeHtml(w.translation)}">${escapeHtml(w.word)}</button>`
+          )
+          .join("");
+      box.appendChild(chips);
+      chips.querySelectorAll(".sample-word").forEach((b) => {
+        b.onclick = () => {
+          $("#search-input").value = b.dataset.w;
+          doSearch(b.dataset.w, true);
+        };
+      });
+    }
+  }
+
   // 高亮词形变体：搜 run 时 running / runs 也标黄（从例句里现收，覆盖前缀兜底命中的形态）
   const terms = collectHighlightTerms(word, data.sentences || [], Boolean(data.lemma_used));
 
@@ -453,17 +481,30 @@ function renderSearchResult(word, data) {
   if (sentences.length) {
     const title = document.createElement("div");
     title.className = "result-title";
-    title.innerHTML = data.phrase
-      ? `短语例句 <span class="count">${sentences.length} 条</span>`
-      : `真题例句 <span class="count">${sentences.length} 条</span>`;
+    if (data.reverse) {
+      title.innerHTML = `相关真题例句 <span class="count">${sentences.length} 条</span>`;
+    } else if (data.phrase) {
+      title.innerHTML = `短语例句 <span class="count">${sentences.length} 条</span>`;
+    } else {
+      title.innerHTML = `真题例句 <span class="count">${sentences.length} 条</span>`;
+    }
     box.appendChild(title);
-    sentences.forEach((s, i) => box.appendChild(buildSentenceCard(s, terms, i, word)));
+    if (data.reverse) {
+      // 反查结果按各自命中的词高亮/收录
+      sentences.forEach((s, i) => box.appendChild(buildSentenceCard(s, collectHighlightTerms(s.matched_word, [s], false), i, s.matched_word)));
+    } else {
+      sentences.forEach((s, i) => box.appendChild(buildSentenceCard(s, terms, i, word)));
+    }
   } else {
     const empty = document.createElement("div");
     empty.className = "hint-block";
-    empty.innerHTML = `未在已导入的真题里找到「<b>${escapeHtml(word)}</b>」的例句。<br>多导入几份真题，它就会慢慢出现。`;
+    if (data.reverse) {
+      empty.innerHTML = `词典缓存里没有释义含「<b>${escapeHtml(word)}</b>」的词。<br>查过的词越多，反查越准；也可以配置 LLM Key 用 AI 释义。`;
+    } else {
+      empty.innerHTML = `未在已导入的真题里找到「<b>${escapeHtml(word)}</b>」的例句。<br>多导入几份真题，它就会慢慢出现。`;
+    }
     box.appendChild(empty);
-    attachSimilarWords(box, word);
+    if (!data.reverse) attachSimilarWords(box, word);
   }
 }
 
@@ -1307,31 +1348,50 @@ async function loadDocuments() {
   }
 }
 
-// 文档预览面板：句子列表 + 文档内搜索（双击句中单词直接查词）
-async function loadDocPreview(doc, panel, q) {
+// 文档预览面板：句子列表 + 文档内搜索（双击句中单词直接查词），支持「加载更多」翻页
+const DP_PAGE = 50;
+
+async function loadDocPreview(doc, panel, q, append = false) {
   const listEl = panel.querySelector(".dp-list") || panel;
-  listEl.innerHTML = `<div class="dp-status">加载中…</div>`;
+  const offset = append ? panel.querySelectorAll(".dp-line").length : 0;
+  if (!append) listEl.innerHTML = `<div class="dp-status">加载中…</div>`;
+  panel.querySelector('[data-act="dp-more"]')?.remove();
   try {
-    const params = new URLSearchParams({ limit: 50 });
+    const params = new URLSearchParams({ limit: DP_PAGE, offset });
     if (q) params.set("q", q);
     const data = await api(`/api/documents/${doc.id}/sentences?${params}`);
     panel.dataset.loaded = "1";
+    panel.dataset.q = q || "";
     const count = panel.querySelector(".dp-count");
     if (count) {
+      const shown = offset + data.sentences.length;
       count.textContent = q
-        ? `命中 ${data.total} 句${data.total > data.sentences.length ? "，显示前 50 句" : ""}`
-        : `共 ${data.total} 句${data.total > data.sentences.length ? "，显示前 50 句" : ""}`;
+        ? `命中 ${data.total} 句${data.total > shown ? `，已显示 ${shown} 句` : ""}`
+        : `共 ${data.total} 句${data.total > shown ? `，已显示 ${shown} 句` : ""}`;
     }
-    if (!data.sentences.length) {
+    if (!offset && !data.sentences.length) {
       listEl.innerHTML = `<div class="dp-status">没有匹配的句子</div>`;
       return;
     }
-    listEl.innerHTML = data.sentences
-      .map((s) => `<div class="dp-line" data-pos="${s.position}">${qmark(s.text, q)}</div>`)
-      .join("");
+    listEl.insertAdjacentHTML(
+      "beforeend",
+      data.sentences.map((s) => `<div class="dp-line" data-pos="${s.position}">${qmark(s.text, q)}</div>`).join("")
+    );
     bindDblClickSearch(listEl);
+    if (offset + data.sentences.length < data.total) {
+      const more = document.createElement("button");
+      more.className = "btn btn-ghost btn-sm dp-more";
+      more.dataset.act = "dp-more";
+      more.textContent = `加载更多（还有 ${data.total - offset - data.sentences.length} 句）`;
+      more.onclick = () => {
+        more.disabled = true;
+        more.textContent = "加载中…";
+        loadDocPreview(doc, panel, q, true);
+      };
+      listEl.after(more);
+    }
   } catch (err) {
-    listEl.innerHTML = `<div class="dp-status">加载失败：${escapeHtml(err.message)}</div>`;
+    if (!append) listEl.innerHTML = `<div class="dp-status">加载失败：${escapeHtml(err.message)}</div>`;
   }
 }
 

@@ -256,6 +256,7 @@ async function handleApi(request, env, url) {
     const docId = Number(m[1]);
     const q = (url.searchParams.get("q") || "").trim().slice(0, 100);
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 200);
+    const offset = Math.min(Math.max(Number(url.searchParams.get("offset")) || 0, 0), 100000);
     const doc = await env.DB
       .prepare("SELECT id FROM documents WHERE id = ? AND user_id = ?")
       .bind(docId, user.id)
@@ -272,8 +273,8 @@ async function handleApi(request, env, url) {
       .bind(...binds)
       .first();
     const rows = await env.DB
-      .prepare(`SELECT s.id, s.text, s.position FROM sentences s WHERE ${where} ORDER BY s.position LIMIT ?`)
-      .bind(...binds, limit)
+      .prepare(`SELECT s.id, s.text, s.position FROM sentences s WHERE ${where} ORDER BY s.position LIMIT ? OFFSET ?`)
+      .bind(...binds, limit, offset)
       .all();
     return json({ total: totalRow?.n || 0, limit, sentences: rows.results });
   }
@@ -896,6 +897,10 @@ async function findSentencesByPhrase(env, userId, phrase, examType) {
 
 async function searchWord(env, userId, rawWord, examType) {
   const word = rawWord.trim().toLowerCase();
+  if (/[\u3400-\u9fff\uf900-\ufaff]/.test(word)) {
+    // 中文查询：从词典缓存反查释义命中的词，再联查这些词的真题例句
+    return searchByChinese(env, userId, rawWord.trim(), examType);
+  }
   const isPhrase = /\s/.test(word);
   if (isPhrase) {
     const sentences = await findSentencesByPhrase(env, userId, word, examType);
@@ -918,6 +923,52 @@ async function searchWord(env, userId, rawWord, examType) {
     lemmaUsed = sentences.length > 0;
   }
   return { definition, sentences, phrase: false, lemma_used: lemmaUsed };
+}
+
+// 中文反查：词典缓存的 translation/definition LIKE 命中 → 候选词 → 一次 IN 联查全部真题例句。
+// sentence 带回 matched_word，前端据此高亮并让「收录」挂对单词。
+async function searchByChinese(env, userId, term, examType) {
+  const escaped = term.replace(/[\\%_]/g, (ch) => "\\" + ch);
+  const pattern = `%${escaped}%`;
+  const candidates = await env.DB.prepare(
+    `SELECT word, phonetic, translation FROM dictionary_cache
+     WHERE translation LIKE ? ESCAPE '\\' OR definition LIKE ? ESCAPE '\\'
+     ORDER BY updated_at DESC LIMIT 12`
+  )
+    .bind(pattern, pattern)
+    .all();
+  const words = candidates.results.map((r) => r.word);
+  if (!words.length) {
+    return { definition: null, sentences: [], phrase: false, reverse: { term, words: [] } };
+  }
+
+  const rows = await env.DB.prepare(
+    `SELECT DISTINCT s.id, s.text, s.document_id, s.position, d.filename, d.exam_type, w.word AS matched_word
+     FROM words w
+     JOIN word_sentences ws ON ws.word_id = w.id
+     JOIN sentences s ON s.id = ws.sentence_id
+     JOIN documents d ON d.id = s.document_id
+     WHERE w.word IN (${words.map(() => "?").join(",")}) AND d.user_id = ?${examFilterSql(examType)}`
+  )
+    .bind(...words, userId, ...(examType ? [examType] : []))
+    .all();
+
+  // 按候选词的相关度排序：释义更短（更精准）的词排前，同词内按文档/位置
+  const rank = new Map(words.map((w, i) => [w, i]));
+  const sentences = rows.results
+    .sort(
+      (a, b) =>
+        (rank.get(a.matched_word) ?? 99) - (rank.get(b.matched_word) ?? 99) ||
+        a.document_id - b.document_id ||
+        a.position - b.position
+    )
+    .slice(0, SENTENCE_LIMIT);
+  return {
+    definition: null,
+    sentences,
+    phrase: false,
+    reverse: { term, words: candidates.results },
+  };
 }
 
 async function findSentencesByLemmaPrefix(env, userId, word, examType) {
