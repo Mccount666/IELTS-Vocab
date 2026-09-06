@@ -199,6 +199,7 @@ let authMode = "login";
 
 function enterAuthMode(message = "") {
   state.user = null;
+  state.settings = null; // 换账号前清掉上一账号的配置状态，避免「已配置 Key」等提示残留
   wordbookCache = [];
   wbWordMap = new Map();
   searchCache.clear();

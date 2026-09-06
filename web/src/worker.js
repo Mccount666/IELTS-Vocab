@@ -191,7 +191,8 @@ async function handleApi(request, env, url) {
     for (const [key, value] of Object.entries(body)) {
       if (!USER_SETTING_KEYS.has(key)) continue;
       if (typeof value !== "string") continue;
-      await setUserSetting(env, user.id, key, value.trim());
+      // 截断到 2KB：合法配置远达不到该长度，防异常载荷把 D1 行撑爆
+      await setUserSetting(env, user.id, key, value.trim().slice(0, 2048));
     }
     return json({ ok: true });
   }
@@ -292,7 +293,7 @@ async function handleApi(request, env, url) {
 
   // ---------- 搜索 ----------
   if (pathname === "/api/search" && method === "GET") {
-    const word = (url.searchParams.get("word") || "").trim();
+    const word = (url.searchParams.get("word") || "").trim().slice(0, 120);
     const examType = (url.searchParams.get("exam_type") || "").trim();
     if (!word) return json({ definition: null, sentences: [], phrase: false });
     return json(await searchWord(env, user.id, word, examType));
@@ -549,7 +550,7 @@ async function handleApi(request, env, url) {
 
   // ---------- 词典（缓存 + 在线兜底） ----------
   if (pathname === "/api/dictionary" && method === "GET") {
-    const word = (url.searchParams.get("word") || "").trim().toLowerCase();
+    const word = (url.searchParams.get("word") || "").trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
     return json({ definition: await getDefinitionCached(env, word) });
   }
