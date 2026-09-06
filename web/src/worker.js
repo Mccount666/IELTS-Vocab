@@ -41,6 +41,7 @@ const MAX_WORDBOOK_WORDS = 20000; // 每用户生词数
 const MAX_REVIEWS_PER_DAY = 2000; // 每用户每天复习记录数（review_log 每次评分都插一行，无上限可被脚本刷爆）
 const MAX_LLM_CALLS_PER_DAY = 500; // 每用户每天 LLM 代理调用数（define + translate 合计）；
 // 调用烧的是用户自己的 Key，但每次都消耗全站共享的免费请求额度，开放注册下必须设闸
+const MAX_PUSH_SUBSCRIPTIONS = 10; // 每用户推送设备数上限
 
 // 每用户可保存的设置键（Key 明文永不下发浏览器，GET 只回打码值）
 const USER_SETTING_KEYS = new Set([
@@ -93,6 +94,10 @@ export default {
       console.error("Unhandled API error:", err);
       return json({ error: `服务器内部错误：${err.message}` }, 500);
     }
+  },
+  // 每日复习提醒（cron：UTC 01:00 = 北京 09:00）：给所有订阅设备发空推送
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(sendReviewReminders(env));
   },
 };
 
@@ -732,6 +737,50 @@ async function handleApi(request, env, url) {
     return exportBackup(env, user);
   }
 
+  // ---------- Web Push（每日复习提醒） ----------
+  if (pathname === "/api/push/vapid-public" && method === "GET") {
+    return json({ publicKey: env.VAPID_PUBLIC_KEY || "" });
+  }
+
+  if (pathname === "/api/push/subscribe" && method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const endpoint = strField(body.endpoint, 1024).trim();
+    const p256dh = strField(body.keys?.p256dh, 512).trim();
+    const auth = strField(body.keys?.auth, 512).trim();
+    if (!/^https:\/\//.test(endpoint) || !p256dh || !auth) throw new HttpError(400, "推送订阅参数不完整");
+    // endpoint 全局唯一：换账号重新订阅会覆盖归属；新设备才计入每用户设备数配额
+    const existing = await env.DB.prepare("SELECT user_id FROM push_subscriptions WHERE endpoint = ?").bind(endpoint).first();
+    if (!existing) {
+      const countRow = await env.DB
+        .prepare("SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?")
+        .bind(user.id)
+        .first();
+      if ((countRow?.n || 0) >= MAX_PUSH_SUBSCRIPTIONS) {
+        throw new HttpError(400, `推送设备数已达上限（${MAX_PUSH_SUBSCRIPTIONS} 台），请先在旧设备上关闭提醒`);
+      }
+    }
+    await env.DB.prepare(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`
+    )
+      .bind(user.id, endpoint, p256dh, auth, nowIso())
+      .run();
+    return json({ ok: true });
+  }
+
+  if (pathname === "/api/push/unsubscribe" && method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const endpoint = strField(body.endpoint, 1024).trim();
+    if (endpoint) {
+      await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?").bind(endpoint, user.id).run();
+    }
+    return json({ ok: true });
+  }
+
+  if (pathname === "/api/push/due-count" && method === "GET") {
+    return json({ due: await dueCountUtc8(env, user.id) });
+  }
+
   throw new HttpError(404, `未知接口：${method} ${pathname}`);
 }
 
@@ -1152,6 +1201,88 @@ async function exportBackup(env, user) {
       "X-Content-Type-Options": "nosniff",
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Web Push（每日复习提醒）
+// 设计：推送不带 payload（空推送），免去 aes128gcm 载荷加密，只需 VAPID JWT
+// （ES256，WebCrypto 原生支持）；SW 收到推送后自己拉 /api/push/due-count 再弹通知。
+// 到期判断统一按 UTC+8 口径（next_review_at 存的是客户端本地时间，站内以中文
+// 学生为主）；精确的「今日到期」仍以打开应用后前端按本地时区算的为准。
+// ---------------------------------------------------------------------------
+
+function b64urlEncode(bytes) {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function b64urlDecode(s) {
+  const bin = atob(String(s).replace(/-/g, "+").replace(/_/g, "/"));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function utc8Today() {
+  return new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+}
+
+async function dueCountUtc8(env, userId) {
+  const row = await env.DB
+    .prepare(
+      `SELECT COUNT(*) AS n FROM wordbook
+       WHERE user_id = ? AND (next_review_at = '' OR substr(next_review_at, 1, 10) <= ?)`
+    )
+    .bind(userId, utc8Today())
+    .first();
+  return row?.n || 0;
+}
+
+// VAPID Authorization 头：签一张 ES256 JWT（aud=推送服务 origin，exp 12 小时）
+async function vapidAuthHeader(endpoint, env) {
+  const enc = (obj) => b64urlEncode(new TextEncoder().encode(JSON.stringify(obj)));
+  const aud = new URL(endpoint).origin;
+  const input = `${enc({ typ: "JWT", alg: "ES256" })}.${enc({
+    aud,
+    exp: Math.floor(Date.now() / 1000) + 12 * 3600,
+    sub: env.VAPID_SUBJECT || "mailto:admin@example.com",
+  })}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    b64urlDecode(env.VAPID_PRIVATE_KEY),
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(input));
+  return `vapid t=${input}.${b64urlEncode(new Uint8Array(sig))}, k=${env.VAPID_PUBLIC_KEY}`;
+}
+
+// 每日提醒：给订阅设备逐台发空推送，404/410（订阅已失效）顺手清理。
+// 免费版每次调用最多约 50 个子请求，单轮只处理 40 台设备——用户规模上来后
+// 把 cron 调密并按 id 游标分批
+async function sendReviewReminders(env) {
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
+  const subs = await env.DB.prepare("SELECT id, endpoint FROM push_subscriptions ORDER BY id LIMIT 40")
+    .all()
+    .then((r) => r.results);
+  for (const s of subs) {
+    let auth = null;
+    try {
+      auth = await vapidAuthHeader(s.endpoint, env);
+      const resp = await fetch(s.endpoint, {
+        method: "POST",
+        headers: { TTL: "86400", Urgency: "normal", Authorization: auth },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (resp.status === 404 || resp.status === 410) {
+        await env.DB.prepare("DELETE FROM push_subscriptions WHERE id = ?").bind(s.id).run();
+      }
+    } catch {
+      // 单台失败（网络/签名）不影响其余设备
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

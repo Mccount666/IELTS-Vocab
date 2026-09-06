@@ -16,6 +16,15 @@
       "database_id": "9595e28e-a1cf-4c7d-8972-22069fdef30a"
     }
   ],
+  // VAPID 公钥是公开信息可入库；私钥走 secret（本地 .dev.vars，线上 wrangler secret put VAPID_PRIVATE_KEY）
+  // cron：UTC 01:00 = 北京时间每天 09:00 的复习提醒
+  "vars": {
+    "VAPID_PUBLIC_KEY": "BNWyHfNPv8QBYa5fk8LlU94vMWmOh_6pkIJdlycnTfAzV3_KyTK1lEVY2kMrVVsP4l_g8GqY0ZOrfzjUIi5f2yw",
+    "VAPID_SUBJECT": "mailto:ielts-vocab@mccou.workers.dev"
+  },
+  "triggers": {
+    "crons": ["0 1 * * *"]
+  },
   "observability": {
     "enabled": true
   }

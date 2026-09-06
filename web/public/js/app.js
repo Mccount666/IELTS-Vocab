@@ -2233,6 +2233,7 @@ async function loadSettingsForm() {
   $("#reg-code").placeholder = s.registration_code_set ? "已开启注册码；留空保持，输入 - 清除" : "留空则任何人可注册";
   $("#reg-status").textContent = s.registration_code_set ? "已开启注册码保护" : "开放注册";
   $("#reg-status").className = `field-status ${s.registration_code_set ? "ok" : ""}`;
+  initPushCard(); // 复习提醒卡的开关状态随当前浏览器的订阅情况刷新
 }
 
 $("#save-settings").addEventListener("click", async () => {
@@ -2270,8 +2271,84 @@ $("#save-settings").addEventListener("click", async () => {
   }
 });
 
-$("#llm-test").addEventListener("click", async () => {
-  const btn = $("#llm-test");
+// ---------------------------------------------------------------------------
+// 每日复习提醒（Web Push）：空推送唤醒 SW，SW 拉取到期数后弹通知。
+// 订阅归属当前浏览器设备，换设备需重新开启；推送走服务器 cron（每天 9:00）
+// ---------------------------------------------------------------------------
+
+function urlB64ToUint8Array(b64url) {
+  const pad = "=".repeat((4 - (b64url.length % 4)) % 4);
+  const raw = atob((b64url + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+function setPushUi(on) {
+  const btn = $("#push-toggle");
+  const status = $("#push-status");
+  if (!btn) return;
+  btn.textContent = on ? "关闭提醒" : "开启提醒";
+  status.textContent = on ? "✓ 已开启，每天 9:00 提醒" : "未开启";
+  status.className = `field-status ${on ? "ok" : ""}`;
+}
+
+async function initPushCard() {
+  const card = $("#push-card");
+  if (!card) return;
+  // PushManager 只存在于安全上下文（https / localhost）；不支持的环境整卡隐藏
+  if (!("PushManager" in window) || !("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    setPushUi(Boolean(sub));
+    card.hidden = false;
+  } catch {
+    card.hidden = true;
+  }
+}
+
+$("#push-toggle").addEventListener("click", async () => {
+  const btn = $("#push-toggle");
+  btn.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      try {
+        await api("/api/push/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+      } catch {}
+      await sub.unsubscribe();
+      setPushUi(false);
+      toast("已关闭每日复习提醒", "ok");
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") throw new Error("浏览器通知权限未授予，无法开启提醒");
+      const { publicKey } = await api("/api/push/vapid-public");
+      if (!publicKey) throw new Error("站点未配置推送服务");
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(publicKey),
+      });
+      const j = sub.toJSON();
+      await api("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: j.endpoint, keys: j.keys }),
+      });
+      setPushUi(true);
+      toast("已开启每日复习提醒", "ok");
+    }
+  } catch (err) {
+    toast(err.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#llm-test").addEventListener("click", async () => {  const btn = $("#llm-test");
   btn.disabled = true;
   btn.textContent = "测试中…";
   try {

@@ -155,3 +155,15 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+
+-- Web Push 订阅（011-push-subscriptions.sql）：每日复习提醒，endpoint 全局唯一，
+-- 404/410 时清理；cron 每天发空推送，SW 收到后自行拉取到期数弹通知
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id);

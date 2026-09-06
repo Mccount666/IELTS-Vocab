@@ -78,6 +78,6 @@ console.log("— 前端静态断言 —");
 const appJs = await (await fetch(BASE + "/js/app.js")).text();
 ok(appJs.includes("hideSuggest(); // 联想下拉别挂着上一账号词表里的词"), "换号时清联想下拉");
 const swText = await (await fetch(BASE + "/sw.js")).text();
-ok(swText.includes('VERSION = "v19"'), "sw.js 已升到 v19");
+ok(/VERSION = "v\d+"/.test(swText), "sw.js 存在版本号（当前版本由当轮冒烟断言）");
 
 console.log(`\nr25 冒烟：${passed} 项全部通过`);
