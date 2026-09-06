@@ -4,7 +4,7 @@
 //   - 页面导航 network-first（保证部署后第一时间拿到新版本 HTML）
 //   - 静态资源 stale-while-revalidate（先回缓存秒开，后台更新，下次生效）
 // 每次改静态资源需递增 VERSION 以清掉旧缓存。
-const VERSION = "v18";
+const VERSION = "v19";
 const CACHE = `ielts-vocab-${VERSION}`;
 const PRECACHE = ["/", "/style.css", "/js/app.js", "/js/pipeline.js", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 

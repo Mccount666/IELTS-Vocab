@@ -72,6 +72,14 @@ export function llmDefaults(settings) {
   };
 }
 
+// 调用前的就绪检查：URL 门 + Key 门。路由层用它把「这次调用注定失败」的情况
+// 拦在每日计数之前，失败的调用不烧用户的 LLM 额度
+export function ensureLlmReady(settings) {
+  const d = llmDefaults(settings);
+  if (!d.apiKey) throw new HttpError(400, "尚未配置 LLM API Key，请到「设置」页填写");
+  return d;
+}
+
 // hostname 是否为内网/保留地址（含 IPv4 十进制、IPv6 回环/ULA/链路本地、.internal 等）
 function isPrivateHost(hostname) {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");

@@ -129,6 +129,6 @@ const appJs = await (await fetch(BASE + "/js/app.js")).text();
 ok(appJs.includes("documentsCache.push({ id: docId"), "同批次导入成功后登记进 documentsCache");
 ok(appJs.includes("cached.definition = definition"), "AI 释义后会话缓存同步");
 const swText = await (await fetch(BASE + "/sw.js")).text();
-ok(swText.includes('VERSION = "v18"'), "sw.js 已升到 v18");
+ok(swText.match(/VERSION = "v\d+"/), "sw.js 存在版本号（当前版本由当轮冒烟断言）");
 
 console.log(`\nr23 冒烟：${passed} 项全部通过`);

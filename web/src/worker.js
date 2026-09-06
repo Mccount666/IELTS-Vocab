@@ -10,6 +10,7 @@ import {
   lookupOnline,
   llmDefine,
   llmTranslate,
+  ensureLlmReady,
   mineruRequestUploadUrls,
   mineruBatchResult,
   isMineruDownloadUrlAllowed,
@@ -38,6 +39,8 @@ const MAX_DOCUMENTS = 500; // 每用户文档数
 const MAX_DOC_SENTENCES = 20000; // 单文档句子数（含追加）
 const MAX_WORDBOOK_WORDS = 20000; // 每用户生词数
 const MAX_REVIEWS_PER_DAY = 2000; // 每用户每天复习记录数（review_log 每次评分都插一行，无上限可被脚本刷爆）
+const MAX_LLM_CALLS_PER_DAY = 500; // 每用户每天 LLM 代理调用数（define + translate 合计）；
+// 调用烧的是用户自己的 Key，但每次都消耗全站共享的免费请求额度，开放注册下必须设闸
 
 // 每用户可保存的设置键（Key 明文永不下发浏览器，GET 只回打码值）
 const USER_SETTING_KEYS = new Set([
@@ -121,6 +124,21 @@ function nowIso() {
 // 不走 String() 兜底——那会把对象变成 "[object Object]" 这类垃圾入库
 function strField(v, max) {
   return typeof v === "string" ? v.slice(0, max) : "";
+}
+
+// 记一次 LLM 调用并返回当日已用次数：INSERT..ON CONFLICT..RETURNING 原子自增，
+// 并发调用不会都读到旧计数；失败的调用在路由层被 ensureLlmReady 先拦下，不计数
+async function countLlmCall(env, userId) {
+  const day = nowIso().slice(0, 10);
+  const row = await env.DB
+    .prepare(
+      `INSERT INTO llm_usage (user_id, day, count) VALUES (?, ?, 1)
+       ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1
+       RETURNING count`
+    )
+    .bind(userId, day)
+    .first();
+  return row?.count || 1;
 }
 
 function maskSecret(value) {
@@ -629,6 +647,12 @@ async function handleApi(request, env, url) {
     // word 类型门：对象不该被 String() 兜底成 "[object object]" 入库
     const word = strField(body.word, 255).trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
+    // 就绪检查在前：URL/Key 有问题的调用不计数；随后原子计数并做每日上限闸
+    ensureLlmReady(settings);
+    const used = await countLlmCall(env, user.id);
+    if (used > MAX_LLM_CALLS_PER_DAY) {
+      throw new HttpError(429, `今日 AI 调用已达上限（${MAX_LLM_CALLS_PER_DAY} 次），请明天再来`);
+    }
     const def = await llmDefine(settings, word);
     await cacheDefinition(env, def, user.id);
     return json({ definition: def });
@@ -641,6 +665,11 @@ async function handleApi(request, env, url) {
     // text 走 strField 类型门，对象不再变成 "[object Object]" 被送去翻译
     const text = strField(body.text, 4000).trim().slice(0, 2000);
     if (!text) throw new HttpError(400, "缺少 text");
+    ensureLlmReady(settings);
+    const used = await countLlmCall(env, user.id);
+    if (used > MAX_LLM_CALLS_PER_DAY) {
+      throw new HttpError(429, `今日 AI 调用已达上限（${MAX_LLM_CALLS_PER_DAY} 次），请明天再来`);
+    }
     const zh = await llmTranslate(settings, text);
     return json({ zh });
   }

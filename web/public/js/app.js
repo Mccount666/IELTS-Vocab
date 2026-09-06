@@ -218,6 +218,7 @@ function enterAuthMode(message = "") {
   try {
     localStorage.removeItem(RECENT_KEY);
   } catch {}
+  hideSuggest(); // 联想下拉别挂着上一账号词表里的词
   state.currentWord = "";
   state.lastResult = null;
   document.body.classList.add("auth-mode");

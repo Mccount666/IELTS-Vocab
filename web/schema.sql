@@ -146,3 +146,12 @@ CREATE TABLE IF NOT EXISTS auth_failures (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_failures_user_time ON auth_failures (username, attempted_at);
 CREATE INDEX IF NOT EXISTS idx_auth_failures_time ON auth_failures (attempted_at);
+
+-- LLM 代理每用户每日调用计数（010-llm-usage.sql）：开放注册下脚本滥用一个账号
+-- 会烧掉全站共享的免费请求额度，达上限后当日 429
+CREATE TABLE IF NOT EXISTS llm_usage (
+    user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+);
