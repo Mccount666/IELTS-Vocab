@@ -667,6 +667,14 @@ function buildDefCard(def) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ word: def.word }),
         });
+        // 同步会话缓存与当前结果：AI 释义已入服务端缓存，本地不更新的话同词重查会回退到旧释义
+        if (state.lastResult?.definition?.word?.toLowerCase() === String(definition.word).toLowerCase()) {
+          state.lastResult.definition = definition;
+        }
+        const cached = searchCache.get(`${state.examFilter}|${String(definition.word).toLowerCase()}`);
+        if (cached?.definition?.word?.toLowerCase() === String(definition.word).toLowerCase()) {
+          cached.definition = definition;
+        }
         const fresh = buildDefCard(definition);
         card.replaceWith(fresh);
       } catch (err) {
@@ -1082,7 +1090,10 @@ async function handleFiles(files) {
         continue;
       }
       try {
-        await createDocumentWithSentences(file.name, examType, sentences, (msg) => q.setStatus(msg), (r) => q.setProgress(r));
+        const docId = await createDocumentWithSentences(file.name, examType, sentences, (msg) => q.setStatus(msg), (r) => q.setProgress(r));
+        // 立刻登记进缓存：同批次里再有同名文件时 confirmDuplicate 才拦得住
+        //（loadDocuments 要等整批结束才刷新，中途 documentsCache 还是旧的）
+        documentsCache.push({ id: docId, filename: file.name, sentence_count: sentences.length });
         q.done(`导入完成：${sentences.length} 句`);
       } catch (err) {
         q.fail(err.message);

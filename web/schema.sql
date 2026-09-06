@@ -135,3 +135,13 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_attempts_ip_time ON auth_attempts (ip, attempted_at);
 CREATE INDEX IF NOT EXISTS idx_auth_attempts_time ON auth_attempts (attempted_at);
+
+-- 登录失败锁定：按用户名记失败（008-auth-failures.sql），同账号窗口内失败达上限
+-- 直接 429，防对特定账号的定向爆破；成功登录即清零
+CREATE TABLE IF NOT EXISTS auth_failures (
+    username TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    attempted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_failures_user_time ON auth_failures (username, attempted_at);
+CREATE INDEX IF NOT EXISTS idx_auth_failures_time ON auth_failures (attempted_at);

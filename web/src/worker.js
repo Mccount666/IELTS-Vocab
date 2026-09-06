@@ -51,6 +51,10 @@ const USER_SETTING_KEYS = new Set([
 const AUTH_RATE_LIMIT = 30;
 const AUTH_RATE_WINDOW_MIN = 15;
 
+// 登录失败锁定：同一用户名在窗口期内失败 LOGIN_FAILURE_LIMIT 次（密码错或用户不存在）
+// 后直接 429，防绕开 IP 限速对特定账号的定向爆破；成功登录即清零，正常用户输错几次不会被锁死
+const LOGIN_FAILURE_LIMIT = 10;
+
 // 占位密码哈希：登录时对不存在的用户也执行一次等价 PBKDF2，拉平响应时间
 // （格式与 auth.js hashPassword 一致：pbkdf2:迭代:16字节盐b64:32字节哈希b64）
 const DUMMY_PASSWORD_HASH = `pbkdf2:100000:${"A".repeat(22)}==:${"A".repeat(43)}=`;
@@ -696,51 +700,7 @@ async function handleApi(request, env, url) {
 
   // ---------- 备份导出（仅当前用户自己的数据） ----------
   if (pathname === "/api/export" && method === "GET") {
-    const dump = {};
-    dump.documents = await env.DB.prepare("SELECT * FROM documents WHERE user_id = ?").bind(user.id).all()
-      .then((r) => r.results);
-    dump.sentences = await env.DB.prepare(
-      "SELECT s.* FROM sentences s JOIN documents d ON d.id = s.document_id WHERE d.user_id = ?"
-    )
-      .bind(user.id)
-      .all()
-      .then((r) => r.results);
-    dump.words = await env.DB.prepare(
-      `SELECT DISTINCT w.* FROM words w
-       JOIN word_sentences ws ON ws.word_id = w.id
-       JOIN sentences s ON s.id = ws.sentence_id
-       JOIN documents d ON d.id = s.document_id
-       WHERE d.user_id = ?`
-    )
-      .bind(user.id)
-      .all()
-      .then((r) => r.results);
-    dump.word_sentences = await env.DB.prepare(
-      `SELECT ws.* FROM word_sentences ws
-       JOIN sentences s ON s.id = ws.sentence_id
-       JOIN documents d ON d.id = s.document_id
-       WHERE d.user_id = ?`
-    )
-      .bind(user.id)
-      .all()
-      .then((r) => r.results);
-    dump.wordbook = await env.DB.prepare("SELECT * FROM wordbook WHERE user_id = ?").bind(user.id).all()
-      .then((r) => r.results);
-    dump.user_settings = await env.DB.prepare("SELECT key, value FROM user_settings WHERE user_id = ?")
-      .bind(user.id)
-      .all()
-      .then((r) => r.results);
-    dump.exported_at = nowIso();
-    const stamp = nowIso().slice(0, 10).replaceAll("-", "");
-    return new Response(JSON.stringify(dump, null, 2), {
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="ielts-vocab-backup-${stamp}.json"`,
-        // 备份里含明文 API Key，与 API JSON 同样禁缓存
-        "Cache-Control": "no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+    return exportBackup(env, user);
   }
 
   throw new HttpError(404, `未知接口：${method} ${pathname}`);
@@ -751,8 +711,12 @@ async function handleApi(request, env, url) {
 // ---------------------------------------------------------------------------
 
 // 认证请求限速：记一条本次请求 + 顺手清理 1 小时前的旧记录，超限直接 429
+function clientIp(request) {
+  return request.headers.get("CF-Connecting-IP") || "unknown";
+}
+
 async function authRateLimit(env, request) {
-  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const ip = clientIp(request);
   const windowStart = new Date(Date.now() - AUTH_RATE_WINDOW_MIN * 60000).toISOString().replace("T", " ").slice(0, 19);
   const row = await env.DB
     .prepare("SELECT COUNT(*) AS n FROM auth_attempts WHERE ip = ? AND attempted_at >= ?")
@@ -765,6 +729,15 @@ async function authRateLimit(env, request) {
   await env.DB.batch([
     env.DB.prepare("INSERT INTO auth_attempts (ip, attempted_at) VALUES (?, ?)").bind(ip, nowIso()),
     env.DB.prepare("DELETE FROM auth_attempts WHERE attempted_at < ?").bind(staleBefore),
+  ]);
+}
+
+// 记一次登录失败（按用户名维度）；顺手清理 1 小时前的旧记录防表无限增长
+async function recordAuthFailure(env, username, ip) {
+  const staleBefore = new Date(Date.now() - 3600_000).toISOString().replace("T", " ").slice(0, 19);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO auth_failures (username, ip, attempted_at) VALUES (?, ?, ?)").bind(username, ip, nowIso()),
+    env.DB.prepare("DELETE FROM auth_failures WHERE attempted_at < ?").bind(staleBefore),
   ]);
 }
 
@@ -833,6 +806,18 @@ async function login(request, env) {
   const body = await request.json().catch(() => ({}));
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
+
+  // 按用户名维度的失败锁定：窗口内失败达上限直接 429（先于 PBKDF2，爆破请求也不再消耗 CPU）。
+  // 用户不存在的失败同样记账，429 文案不区分账号是否存在
+  const windowStart = new Date(Date.now() - AUTH_RATE_WINDOW_MIN * 60000).toISOString().replace("T", " ").slice(0, 19);
+  const failRow = await env.DB
+    .prepare("SELECT COUNT(*) AS n FROM auth_failures WHERE username = ? AND attempted_at >= ?")
+    .bind(username, windowStart)
+    .first();
+  if ((failRow?.n || 0) >= LOGIN_FAILURE_LIMIT) {
+    throw new HttpError(429, `该账号失败次数过多，请 ${AUTH_RATE_WINDOW_MIN} 分钟后再试`);
+  }
+
   const row = await env.DB
     .prepare("SELECT id, username, is_admin, password_hash FROM users WHERE username = ?")
     .bind(username)
@@ -841,11 +826,15 @@ async function login(request, env) {
   // 对不存在的用户也跑一次同代价的哈希验证，避免响应时间差绕过文案层面的一致性
   if (!row) {
     await verifyPassword(password, DUMMY_PASSWORD_HASH);
+    await recordAuthFailure(env, username, clientIp(request));
     throw new HttpError(401, "用户名或密码错误");
   }
   if (!(await verifyPassword(password, row.password_hash))) {
+    await recordAuthFailure(env, username, clientIp(request));
     throw new HttpError(401, "用户名或密码错误");
   }
+  // 成功登录清零失败计数：正常用户输错几次不会被累积锁死
+  await env.DB.prepare("DELETE FROM auth_failures WHERE username = ?").bind(username).run();
   const token = await createSession(env, row.id);
   return json(
     { ok: true, user: { id: row.id, username: row.username, is_admin: Boolean(row.is_admin) } },
@@ -894,15 +883,20 @@ async function appendSentences(env, userId, docId, sentences) {
   const end = reserved.next_pos;
   const start = end - clean.length;
 
-  // 1) 插入句子
+  // 1) 插入句子。i 是 BATCH_CHUNK 分块内的局部索引，position 必须加上批次的
+  //    全局偏移——直接用 start + i 会让每个 200 句批次都从 start 重新编号，
+  //    前端 400 句/请求时第 200-399 句 position 重复且拿不到 idByPos 映射
+  //    （既不进倒排索引，备份恢复的 id 映射也是错的）
+  let batchOffset = 0;
   for (const c of chunks(clean, BATCH_CHUNK)) {
     await env.DB.batch(
       c.map((s, i) =>
         env.DB
           .prepare("INSERT INTO sentences (document_id, text, position) VALUES (?, ?, ?)")
-          .bind(docId, s.text, start + i)
+          .bind(docId, s.text, start + batchOffset + i)
       )
     );
+    batchOffset += c.length;
   }
 
   // 2) 取回句子 id（按 position 精确对齐，不做任何自增假设）
@@ -994,6 +988,141 @@ async function deleteDocument(env, userId, docId) {
   ]);
   // 词表全局共享：删除后失去全部例句引用的词成为不可达的孤儿行，顺手清掉
   await env.DB.prepare("DELETE FROM words WHERE id NOT IN (SELECT word_id FROM word_sentences)").run();
+}
+
+// ---------------------------------------------------------------------------
+// 备份导出：TransformStream 流式写出 + keyset 分页
+// 配额打满的用户（500 文档 × 2 万句）若一次性 all() 全量导出，JSON 在 Worker 内存里
+// 翻倍后足以触发 1102；改为按游标每页 EXPORT_PAGE 行增量写出，内存占用恒定。
+// 输出 JSON 的形状与旧版全量导出完全一致，前端恢复逻辑无需感知（仅不再美化打印）。
+// ---------------------------------------------------------------------------
+
+const EXPORT_PAGE = 1000;
+
+async function exportBackup(env, user) {
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const write = (chunk) => writer.write(encoder.encode(chunk));
+
+  (async () => {
+    try {
+      const docs = await env.DB.prepare("SELECT * FROM documents WHERE user_id = ? ORDER BY id")
+        .bind(user.id)
+        .all()
+        .then((r) => r.results);
+      await write(`{"exported_at":${JSON.stringify(nowIso())},"documents":${JSON.stringify(docs)},"sentences":`);
+
+      // runPage() 每次返回下一页（游标在闭包里推进），空页或短页即收尾
+      const writeArray = async (runPage) => {
+        await write("[");
+        let first = true;
+        for (;;) {
+          const rows = await runPage();
+          for (const row of rows) {
+            await write((first ? "" : ",") + JSON.stringify(row));
+            first = false;
+          }
+          if (rows.length < EXPORT_PAGE) break;
+        }
+        await write("]");
+      };
+
+      // 句子：按 (document_id, position) 游标分页，起始游标 (0, -1) 覆盖全部正 id/位置
+      let lastDoc = 0;
+      let lastPos = -1;
+      await writeArray(async () => {
+        const rows = await env.DB
+          .prepare(
+            `SELECT s.* FROM sentences s JOIN documents d ON d.id = s.document_id
+             WHERE d.user_id = ? AND (s.document_id > ? OR (s.document_id = ? AND s.position > ?))
+             ORDER BY s.document_id, s.position LIMIT ${EXPORT_PAGE}`
+          )
+          .bind(user.id, lastDoc, lastDoc, lastPos)
+          .all()
+          .then((r) => r.results);
+        if (rows.length) {
+          lastDoc = rows[rows.length - 1].document_id;
+          lastPos = rows[rows.length - 1].position;
+        }
+        return rows;
+      });
+
+      // 词：全局共享表里只导出被该用户例句引用的词，按 w.id 游标分页
+      await write(',"words":');
+      let lastWord = 0;
+      await writeArray(async () => {
+        const rows = await env.DB
+          .prepare(
+            `SELECT DISTINCT w.* FROM words w
+             JOIN word_sentences ws ON ws.word_id = w.id
+             JOIN sentences s ON s.id = ws.sentence_id
+             JOIN documents d ON d.id = s.document_id
+             WHERE d.user_id = ? AND w.id > ?
+             ORDER BY w.id LIMIT ${EXPORT_PAGE}`
+          )
+          .bind(user.id, lastWord)
+          .all()
+          .then((r) => r.results);
+        if (rows.length) lastWord = rows[rows.length - 1].id;
+        return rows;
+      });
+
+      // 倒排索引：word_sentences 是复合主键表（有隐式 rowid），按 rowid 游标分页
+      await write(',"word_sentences":');
+      let lastWs = 0;
+      await writeArray(async () => {
+        const page = await env.DB
+          .prepare(
+            `SELECT ws.rowid AS rid, ws.word_id, ws.sentence_id FROM word_sentences ws
+             JOIN sentences s ON s.id = ws.sentence_id
+             JOIN documents d ON d.id = s.document_id
+             WHERE d.user_id = ? AND ws.rowid > ?
+             ORDER BY ws.rowid LIMIT ${EXPORT_PAGE}`
+          )
+          .bind(user.id, lastWs)
+          .all()
+          .then((r) => r.results);
+        if (!page.length) return [];
+        lastWs = page[page.length - 1].rid;
+        // rid 只是分页游标，剥掉以保持备份形状与旧版一致（前端恢复并不读该字段）
+        return page.map(({ rid, ...ws }) => ws);
+      });
+
+      await write(',"wordbook":');
+      let lastWb = 0;
+      await writeArray(async () => {
+        const rows = await env.DB
+          .prepare("SELECT * FROM wordbook WHERE user_id = ? AND id > ? ORDER BY id LIMIT " + EXPORT_PAGE)
+          .bind(user.id, lastWb)
+          .all()
+          .then((r) => r.results);
+        if (rows.length) lastWb = rows[rows.length - 1].id;
+        return rows;
+      });
+
+      const settings = await env.DB.prepare("SELECT key, value FROM user_settings WHERE user_id = ?")
+        .bind(user.id)
+        .all()
+        .then((r) => r.results);
+      await write(`,"user_settings":${JSON.stringify(settings)}}`);
+      await writer.close();
+    } catch (e) {
+      console.error("export stream failed:", e);
+      await writer.abort(e);
+    }
+  })();
+
+  const stamp = nowIso().slice(0, 10).replaceAll("-", "");
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": `attachment; filename="ielts-vocab-backup-${stamp}.json"`,
+      // 备份里含明文 API Key，与 API JSON 同样禁缓存
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

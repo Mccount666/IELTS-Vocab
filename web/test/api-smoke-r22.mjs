@@ -54,7 +54,7 @@ ok((csp.match(/style-src[^;]*/) || [""])[0].includes("'unsafe-inline'"), "style-
 console.log("— 静态资源与 SW 版本 —");
 const sw = await fetch(BASE + "/sw.js");
 const swText = await sw.text();
-ok(sw.status === 200 && swText.includes('VERSION = "v17"'), "sw.js 已升到 v17");
+ok(sw.status === 200 && /VERSION = "v\d+"/.test(swText), "sw.js 存在版本号（当前版本由当轮冒烟断言）");
 ok((await fetch(BASE + "/js/app.js")).status === 200, "/js/app.js 可达");
 ok((await fetch(BASE + "/js/pipeline.js")).status === 200, "/js/pipeline.js 可达");
 const appJs = await (await fetch(BASE + "/js/app.js")).text();
