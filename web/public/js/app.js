@@ -2312,9 +2312,18 @@ async function restoreFromBackup(file) {
   } catch {
     return toast("备份文件不是有效的 JSON", "err");
   }
-  const docs = Array.isArray(dump.documents) ? dump.documents.filter((d) => d && d.id != null) : [];
-  const sents = Array.isArray(dump.sentences) ? dump.sentences.filter((s) => s && String(s.text || "").trim()) : [];
-  const wbs = Array.isArray(dump.wordbook) ? dump.wordbook.filter((w) => w && String(w.word || "").trim()) : [];
+  // 行内字段先过类型门再进载荷：这里若用 String() 兜底，对象字段会先变成
+  // "[object Object]" 字符串，后端 strField 门看到的已是字符串，垃圾照样入库
+  // （与 r21 后端口径一致：坏行丢弃，不拦截整个恢复流程）
+  const docs = Array.isArray(dump.documents)
+    ? dump.documents.filter((d) => d && d.id != null && typeof d.filename === "string" && d.filename.trim())
+    : [];
+  const sents = Array.isArray(dump.sentences)
+    ? dump.sentences.filter((s) => s && typeof s.text === "string" && s.text.trim())
+    : [];
+  const wbs = Array.isArray(dump.wordbook)
+    ? dump.wordbook.filter((w) => w && typeof w.word === "string" && w.word.trim())
+    : [];
   const setts = Array.isArray(dump.user_settings)
     ? dump.user_settings.filter((x) => x && RESTORE_SETTING_KEYS.has(x.key) && typeof x.value === "string" && x.value.trim())
     : [];
@@ -2345,8 +2354,8 @@ async function restoreFromBackup(file) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: String(d.filename || `恢复文档 ${d.id}`).slice(0, 255),
-          exam_type: String(d.exam_type || "Other").slice(0, 32),
+          filename: d.filename.trim().slice(0, 255),
+          exam_type: typeof d.exam_type === "string" ? d.exam_type : "Other",
         }),
       });
       const list = (byDoc.get(Number(d.id)) || []).sort(
@@ -2357,9 +2366,9 @@ async function restoreFromBackup(file) {
         const res = await api(`/api/documents/${doc.id}/sentences`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sentences: chunk.map((s) => ({ text: String(s.text).trim(), tokens: sentenceTokens(String(s.text)) })),
-          }),
+            body: JSON.stringify({
+              sentences: chunk.map((s) => ({ text: s.text.trim(), tokens: sentenceTokens(s.text) })),
+            }),
         });
         (res.ids || []).forEach((nid, j) => {
           if (nid && chunk[j]?.id != null) sentIdMap.set(Number(chunk[j].id), nid);
@@ -2369,14 +2378,14 @@ async function restoreFromBackup(file) {
 
     // 2) 生词本：例句引用换成新库 id（换不到就只存单词），保留原熟悉度与收藏时间
     const wbRows = wbs.map((w) => ({
-      word: String(w.word).trim().toLowerCase().slice(0, 64),
-      phonetic: String(w.phonetic || ""),
-      translation: String(w.translation || ""),
-      definition: String(w.definition || ""),
+      word: w.word.trim().toLowerCase().slice(0, 64),
+      phonetic: typeof w.phonetic === "string" ? w.phonetic : "",
+      translation: typeof w.translation === "string" ? w.translation : "",
+      definition: typeof w.definition === "string" ? w.definition : "",
       familiarity: Number(w.familiarity) || 0,
-      last_reviewed_at: String(w.last_reviewed_at || ""),
-      next_review_at: String(w.next_review_at || ""), // 保留 SRS 计划，恢复后不全部变成今日到期
-      added_at: String(w.added_at || ""),
+      last_reviewed_at: typeof w.last_reviewed_at === "string" ? w.last_reviewed_at.slice(0, 32) : "",
+      next_review_at: typeof w.next_review_at === "string" ? w.next_review_at.slice(0, 32) : "", // 保留 SRS 计划，恢复后不全部变成今日到期
+      added_at: typeof w.added_at === "string" ? w.added_at.slice(0, 32) : "",
       sentence_id: w.sentence_id != null ? sentIdMap.get(Number(w.sentence_id)) || null : null,
     }));
     for (let i = 0; i < wbRows.length; i += 100) {

@@ -58,14 +58,16 @@ const DUMMY_PASSWORD_HASH = `pbkdf2:100000:${"A".repeat(22)}==:${"A".repeat(43)}
 // ---------------------------------------------------------------------------
 
 // 统一安全响应头：nosniff 防 MIME 嗅探、禁 iframe 内嵌、限制 Referrer 外泄；
-// CSP 收紧脚本/样式来源（jsdelivr 供 pdf.js / mammoth / fflate 按需动态加载），
-// 即使未来某处 innerHTML 漏了转义，也能挡住外链脚本与内联事件注入
+// CSP 收紧脚本/样式来源（jsdelivr 供 pdf.js / mammoth / fflate 按需动态加载）。
+// script-src 不给 'unsafe-inline'：index.html 仅有的内联主题脚本用 sha256 hash 放行
+// （hash 覆盖 <script>…</script> 之间的精确字节，改动该脚本必须同步更新 worker.js 与
+// public/_headers 两处的 hash），未来某处 innerHTML 漏了转义也注入不了内联脚本。
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+    "default-src 'self'; script-src 'self' 'sha256-YB3KYNKkbbwNnXLMUCwuowciQ+rw3Z3VsNSNtJC5Wug=' https://cdn.jsdelivr.net; " +
     "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; " +
     "font-src 'self' data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
 };
