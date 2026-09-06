@@ -207,6 +207,9 @@ function enterAuthMode(message = "") {
   wordbookCache = [];
   wbWordMap = new Map();
   searchCache.clear();
+  documentsCache = []; // 上一账号的文档列表别留给下一个账号（同名提醒/追加下拉都会用到）
+  state.currentWord = "";
+  state.lastResult = null;
   document.body.classList.add("auth-mode");
   $("#user-chip").hidden = true;
   $("#auth-password").value = "";
@@ -1141,13 +1144,18 @@ $("#paste-target").addEventListener("change", () => {
   $("#paste-title-field").hidden = Boolean($("#paste-target").value);
 });
 
+let pasteStatsTimer = null;
 $("#paste-text").addEventListener("input", () => {
-  const text = $("#paste-text").value;
-  if (!text.trim()) {
-    $("#paste-stats").textContent = "";
-    return;
-  }
-  $("#paste-stats").textContent = `${text.length.toLocaleString()} 字符 · 约 ${buildSentencesPayload(text).length} 句`;
+  // 统计要做完整分句+分词，大文本每次击键全量解析会卡输入，防抖 300ms
+  clearTimeout(pasteStatsTimer);
+  pasteStatsTimer = setTimeout(() => {
+    const text = $("#paste-text").value;
+    if (!text.trim()) {
+      $("#paste-stats").textContent = "";
+      return;
+    }
+    $("#paste-stats").textContent = `${text.length.toLocaleString()} 字符 · 约 ${buildSentencesPayload(text).length} 句`;
+  }, 300);
 });
 
 $("#paste-import").addEventListener("click", async () => {

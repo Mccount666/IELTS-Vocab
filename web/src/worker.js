@@ -398,7 +398,10 @@ async function handleApi(request, env, url) {
   // 备份恢复：批量写入生词本，保留备份里的熟悉度 / 收藏时间（前端分块调用）
   if (pathname === "/api/wordbook/restore" && method === "POST") {
     const body = await request.json().catch(() => ({}));
-    const rows = Array.isArray(body.words) ? body.words.slice(0, 200) : [];
+    // 空词行直接丢弃：/api/wordbook POST 拒绝空 word，恢复路径保持同一口径
+    const rows = (Array.isArray(body.words) ? body.words : [])
+      .filter((r) => String(r?.word || "").trim())
+      .slice(0, 200);
     if (!rows.length) return json({ ok: true, restored: 0 });
 
     // 先批量校验 sentence_id 归属，非法引用降级为无例句收藏
@@ -673,6 +676,8 @@ async function handleApi(request, env, url) {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Disposition": `attachment; filename="ielts-vocab-backup-${stamp}.json"`,
+        // 备份里含明文 API Key，与 API JSON 同样禁缓存
+        "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
       },
     });
