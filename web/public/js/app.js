@@ -206,6 +206,11 @@ function enterAuthMode(message = "") {
   $("#review-overlay").hidden = true;
   wordbookCache = [];
   wbWordMap = new Map();
+  // 批量管理的勾选状态跟着账号走：换号时残留的勾选会让下一个账号误删生词
+  wbBatch.on = false;
+  wbBatch.ids.clear();
+  $("#wb-batch-bar").hidden = true;
+  $("#wb-batch-toggle").classList.remove("is-on");
   searchCache.clear();
   documentsCache = []; // 上一账号的文档列表别留给下一个账号（同名提醒/追加下拉都会用到）
   statsCache = null; // 学习统计同理，别把上一账号的打卡/热力图带给下一个账号
@@ -431,6 +436,7 @@ async function doSearch(word, immediate = false) {
   const key = `${state.examFilter}|${word.toLowerCase()}`;
   if (searchCache.has(key)) {
     state.lastResult = searchCache.get(key);
+    pushRecentWord(word); // 缓存命中也是一次真实查询，同样进「最近查过」
     renderSearchResult(word, state.lastResult);
     return;
   }

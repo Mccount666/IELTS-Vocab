@@ -4,7 +4,7 @@
 //   - 页面导航 network-first（保证部署后第一时间拿到新版本 HTML）
 //   - 静态资源 stale-while-revalidate（先回缓存秒开，后台更新，下次生效）
 // 每次改静态资源需递增 VERSION 以清掉旧缓存。
-const VERSION = "v14";
+const VERSION = "v15";
 const CACHE = `ielts-vocab-${VERSION}`;
 const PRECACHE = ["/", "/style.css", "/js/app.js", "/js/pipeline.js", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
@@ -33,8 +33,11 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((resp) => {
-          const copy = resp.clone();
-          caches.open(CACHE).then((c) => c.put("/", copy));
+          // 只缓存成功响应：4xx/5xx 页面（如临时 502）存进 "/" 会被离线兜底长期端出来
+          if (resp.ok) {
+            const copy = resp.clone();
+            caches.open(CACHE).then((c) => c.put("/", copy));
+          }
           return resp;
         })
         .catch(() => caches.match("/"))

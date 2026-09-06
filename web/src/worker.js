@@ -30,6 +30,13 @@ const BATCH_CHUNK = 200; // 每批 INSERT 语句数
 const IN_CHUNK = 90; // IN (...) 参数个数
 const SENTENCE_LIMIT = 200; // 单次搜索返回例句上限
 
+// 每用户数据配额：注册开放时（站长未设注册码）任何人都可能注册进来，
+// 不设上限的话单账号可以无限建文档/写生词，把全站共享的 D1 免费存储额度撑爆。
+// 阈值远高于正常使用量（一份真题约两三千句），只拦异常与滥用写入。
+const MAX_DOCUMENTS = 500; // 每用户文档数
+const MAX_DOC_SENTENCES = 20000; // 单文档句子数（含追加）
+const MAX_WORDBOOK_WORDS = 20000; // 每用户生词数
+
 // 每用户可保存的设置键（Key 明文永不下发浏览器，GET 只回打码值）
 const USER_SETTING_KEYS = new Set([
   "llm_base_url",
@@ -222,6 +229,10 @@ async function handleApi(request, env, url) {
     const rawExam = String(body.exam_type || "Other").trim().slice(0, 32);
     const examType = /^[A-Za-z0-9_-]+$/.test(rawExam) ? rawExam : "Other";
     if (!filename) throw new HttpError(400, "缺少 filename");
+    const countRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM documents WHERE user_id = ?").bind(user.id).first();
+    if ((countRow?.n || 0) >= MAX_DOCUMENTS) {
+      throw new HttpError(400, `文档数量已达上限（${MAX_DOCUMENTS} 份），请先删除不需要的文档`);
+    }
     const result = await env.DB.prepare(
       "INSERT INTO documents (user_id, filename, exam_type, imported_at) VALUES (?, ?, ?, ?)"
     )
@@ -362,6 +373,14 @@ async function handleApi(request, env, url) {
     // 既过不了所有权校验也没法绑定进 SQL，直接降级为无例句收藏
     const sidNum = Number(body.sentence_id);
     let sentenceId = Number.isInteger(sidNum) && sidNum > 0 ? sidNum : null;
+    // 配额只对新增词计数：已有词的更新（补释义/挂例句）不受限
+    const existing = await env.DB.prepare("SELECT id FROM wordbook WHERE user_id = ? AND word = ?").bind(user.id, word).first();
+    if (!existing) {
+      const countRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM wordbook WHERE user_id = ?").bind(user.id).first();
+      if ((countRow?.n || 0) >= MAX_WORDBOOK_WORDS) {
+        throw new HttpError(400, `生词数量已达上限（${MAX_WORDBOOK_WORDS} 个）`);
+      }
+    }
     if (sentenceId) {
       // 只允许收藏自己文档里的例句
       const owned = await env.DB.prepare(
@@ -406,6 +425,12 @@ async function handleApi(request, env, url) {
       .filter((r) => String(r?.word || "").trim())
       .slice(0, 200);
     if (!rows.length) return json({ ok: true, restored: 0 });
+
+    // 配额：恢复是批量写入路径，与 POST /api/wordbook 受同一总量上限约束
+    const countRow = await env.DB.prepare("SELECT COUNT(*) AS n FROM wordbook WHERE user_id = ?").bind(user.id).first();
+    if ((countRow?.n || 0) + rows.length > MAX_WORDBOOK_WORDS) {
+      throw new HttpError(400, `恢复后生词总数将超过上限（${MAX_WORDBOOK_WORDS} 个），请精简备份或先删除部分生词`);
+    }
 
     // 先批量校验 sentence_id 归属，非法引用降级为无例句收藏
     const wantedSids = [...new Set(rows.map((r) => Number(r.sentence_id)).filter(Boolean))];
@@ -814,12 +839,21 @@ async function appendSentences(env, userId, docId, sentences) {
   if (!clean.length) return { inserted: 0, start: 0 };
 
   // 原子预分配 position 区间：UPDATE ... RETURNING 一条语句内完成计数与分配，
-  // 并发追加同一文档不会拿到重叠区间（先读 MAX 再写会撞出重复 position）
+  // 并发追加同一文档不会拿到重叠区间（先读 MAX 再写会撞出重复 position）；
+  // WHERE 里带配额条件，超限的追加在分配前就被拒绝，不会留下已自增的计数器
   const reserved = await env.DB
-    .prepare("UPDATE documents SET next_pos = next_pos + ? WHERE id = ? AND user_id = ? RETURNING next_pos")
-    .bind(clean.length, docId, userId)
+    .prepare(
+      "UPDATE documents SET next_pos = next_pos + ? " +
+        "WHERE id = ? AND user_id = ? AND next_pos + ? <= ? RETURNING next_pos"
+    )
+    .bind(clean.length, docId, userId, clean.length, MAX_DOC_SENTENCES)
     .first();
-  if (!reserved) throw new HttpError(404, "文档不存在（可能尚未创建、已被删除或不属于你）");
+  if (!reserved) {
+    // 条件更新没命中：要么文档不存在/不属于你，要么单文档句子配额已满，二次查询区分提示
+    const doc = await env.DB.prepare("SELECT id FROM documents WHERE id = ? AND user_id = ?").bind(docId, userId).first();
+    if (!doc) throw new HttpError(404, "文档不存在（可能尚未创建、已被删除或不属于你）");
+    throw new HttpError(400, `单文档句子数已达上限（${MAX_DOC_SENTENCES} 句），请新建文档导入剩余部分`);
+  }
   const end = reserved.next_pos;
   const start = end - clean.length;
 
