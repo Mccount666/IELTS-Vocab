@@ -48,11 +48,17 @@ const DUMMY_PASSWORD_HASH = `pbkdf2:100000:${"A".repeat(22)}==:${"A".repeat(43)}
 
 // ---------------------------------------------------------------------------
 
-// 统一安全响应头：nosniff 防 MIME 嗅探、禁 iframe 内嵌、限制 Referrer 外泄
+// 统一安全响应头：nosniff 防 MIME 嗅探、禁 iframe 内嵌、限制 Referrer 外泄；
+// CSP 收紧脚本/样式来源（jsdelivr 供 pdf.js / mammoth / fflate 按需动态加载），
+// 即使未来某处 innerHTML 漏了转义，也能挡住外链脚本与内联事件注入
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+    "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; " +
+    "font-src 'self' data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
 };
 
 export default {
@@ -202,7 +208,8 @@ async function handleApi(request, env, url) {
     if (!user.is_admin) throw new HttpError(403, "仅站长可修改站点设置");
     const body = await request.json().catch(() => ({}));
     if (typeof body.registration_code === "string") {
-      await setSiteSetting(env, "registration_code", body.registration_code.trim());
+      // 与用户设置同样截断到 2KB：合法注册码远达不到该长度
+      await setSiteSetting(env, "registration_code", body.registration_code.trim().slice(0, 2048));
     }
     return json({ ok: true });
   }
@@ -211,7 +218,9 @@ async function handleApi(request, env, url) {
   if (pathname === "/api/documents" && method === "POST") {
     const body = await request.json().catch(() => ({}));
     const filename = String(body.filename || "").trim().slice(0, 255);
-    const examType = String(body.exam_type || "Other").trim().slice(0, 32);
+    // exam_type 正常来自前端下拉框，但备份恢复等路径可能带入任意字符串：只放行安全字符集，其余归为 Other
+    const rawExam = String(body.exam_type || "Other").trim().slice(0, 32);
+    const examType = /^[A-Za-z0-9_-]+$/.test(rawExam) ? rawExam : "Other";
     if (!filename) throw new HttpError(400, "缺少 filename");
     const result = await env.DB.prepare(
       "INSERT INTO documents (user_id, filename, exam_type, imported_at) VALUES (?, ?, ?, ?)"
@@ -569,7 +578,8 @@ async function handleApi(request, env, url) {
   if (pathname === "/api/llm/translate" && method === "POST") {
     const settings = await getUserSettings(env, user.id);
     const body = await request.json().catch(() => ({}));
-    const text = String(body.text || "").trim();
+    // 路由层就截断：翻译提示词上限 2000 字符，别让超大载荷先占内存再被下游丢弃
+    const text = String(body.text || "").trim().slice(0, 2000);
     if (!text) throw new HttpError(400, "缺少 text");
     const zh = await llmTranslate(settings, text);
     return json({ zh });
@@ -1067,6 +1077,9 @@ function shapeDefinition(row) {
 }
 
 async function cacheDefinition(env, def) {
+  // 字段统一截断：LLM / 在线词典返回的内容长度不可控，防异常响应撑爆 D1 行
+  // （examples 截断后的 JSON 解析失败时 shapeDefinition 会安全降级为空数组）
+  const examples = (Array.isArray(def.examples) ? def.examples : []).slice(0, 8);
   await env.DB.prepare(
     `INSERT INTO dictionary_cache (word, phonetic, translation, definition, examples, source, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1079,12 +1092,12 @@ async function cacheDefinition(env, def) {
        updated_at = excluded.updated_at`
   )
     .bind(
-      def.word.toLowerCase(),
-      def.phonetic || "",
-      def.translation || "",
-      def.definition || "",
-      JSON.stringify(def.examples || []),
-      def.source || "",
+      String(def.word || "").toLowerCase().slice(0, 64),
+      String(def.phonetic || "").slice(0, 128),
+      String(def.translation || "").slice(0, 2000),
+      String(def.definition || "").slice(0, 4000),
+      JSON.stringify(examples).slice(0, 8000),
+      String(def.source || "").slice(0, 128),
       nowIso()
     )
     .run();

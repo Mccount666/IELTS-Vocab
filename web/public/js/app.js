@@ -78,7 +78,8 @@ function highlightHtml(text, terms) {
 }
 
 function badgeClass(examType) {
-  return `badge badge-${String(examType || "Other").replace("-", "")}`;
+  // exam_type 可能经备份恢复等路径带入任意字符串（后端只截长度），class 属性同样要转义
+  return `badge badge-${escapeHtml(String(examType || "Other").replace("-", ""))}`;
 }
 
 // 双击例句文本时取选中的英文单词（浏览器双击会自动选中一个词）
@@ -200,6 +201,9 @@ let authMode = "login";
 function enterAuthMode(message = "") {
   state.user = null;
   state.settings = null; // 换账号前清掉上一账号的配置状态，避免「已配置 Key」等提示残留
+  // 复习浮层是全屏遮罩，不关会把登录表单压在下面，用户看起来像卡死
+  review.open = false;
+  $("#review-overlay").hidden = true;
   wordbookCache = [];
   wbWordMap = new Map();
   searchCache.clear();
@@ -1207,7 +1211,14 @@ async function mineruExtract(file) {
   const deadline = Date.now() + 8 * 60 * 1000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 5000));
-    const data = await api(`/api/mineru/batch/${batchId}`);
+    let data;
+    try {
+      data = await api(`/api/mineru/batch/${batchId}`);
+    } catch (e) {
+      // 轮询途中的瞬时网络抖动不该让整次已上传的 OCR 任务作废，吞掉重试
+      if (String(e.message || "").startsWith("网络请求失败")) continue;
+      throw e;
+    }
     const item = data.extract_result?.[0];
     if (!item) continue;
     if (item.state === "done" && item.full_zip_url) {
@@ -1339,6 +1350,7 @@ async function loadDocuments() {
         if (!confirm(`删除「${d.filename}」？其全部句子与索引将一并清除。`)) return;
         try {
           await api(`/api/documents/${d.id}`, { method: "DELETE" });
+          searchCache.clear(); // 与导入路径对齐：别让已删文档的例句从缓存里“复活”
           toast("已删除", "ok");
           loadDocuments();
         } catch (err) {
@@ -1356,6 +1368,10 @@ async function loadDocuments() {
 const DP_PAGE = 50;
 
 async function loadDocPreview(doc, panel, q, append = false) {
+  // 面板级序号守卫：连续搜索/翻页时只认最后一次请求，防止旧响应覆盖或混入新结果
+  //（多份文档的预览面板可同时展开，序号挂在 panel 上互不干扰）
+  const seq = (Number(panel.dataset.seq) || 0) + 1;
+  panel.dataset.seq = String(seq);
   const listEl = panel.querySelector(".dp-list") || panel;
   const offset = append ? panel.querySelectorAll(".dp-line").length : 0;
   if (!append) listEl.innerHTML = `<div class="dp-status">加载中…</div>`;
@@ -1364,6 +1380,7 @@ async function loadDocPreview(doc, panel, q, append = false) {
     const params = new URLSearchParams({ limit: DP_PAGE, offset });
     if (q) params.set("q", q);
     const data = await api(`/api/documents/${doc.id}/sentences?${params}`);
+    if (seq !== Number(panel.dataset.seq)) return; // 过期响应，丢弃
     panel.dataset.loaded = "1";
     panel.dataset.q = q || "";
     const count = panel.querySelector(".dp-count");
@@ -1770,6 +1787,7 @@ const review = {
   total: 0,
   revealed: false,
   done: false,
+  grading: false, // 评分请求在途标志：连按 1/2/3 不会双写评分或跳卡
   mode: "word", // word = 看词回忆；cloze = 例句填空
   stats: { know: 0, fuzzy: 0, forget: 0 },
 };
@@ -1913,12 +1931,13 @@ function revealReviewCard() {
 }
 
 async function gradeReviewCard(kind) {
-  if (!review.revealed || review.done) return;
+  if (!review.revealed || review.done || review.grading) return;
   const w = review.queue[review.idx];
   const oldF = Math.max(0, Math.min(5, Number(w.familiarity) || 0));
   const newF = kind === "forget" ? Math.max(0, oldF - 1) : kind === "know" ? Math.min(5, oldF + 1) : oldF;
   // SRS 调度：认识 → 按新熟悉度拉长间隔；忘记/模糊 → 明天再见
   const nextAt = nextReviewAtStr(kind === "know" ? SRS_INTERVALS[newF] : 1);
+  review.grading = true;
   try {
     await api("/api/wordbook/review", {
       method: "POST",
@@ -1934,6 +1953,8 @@ async function gradeReviewCard(kind) {
   } catch (err) {
     toast(err.message, "err");
     return; // 保存失败停在本卡，用户可重试
+  } finally {
+    review.grading = false;
   }
   w.familiarity = newF;
   w.next_review_at = nextAt;
@@ -2046,8 +2067,14 @@ $("#export-csv").addEventListener("click", () => {
       w.added_at,
     ]);
   }
+  const csvCell = (c) => {
+    let s = String(c ?? "");
+    // Excel 公式注入防护：= + - @ 开头的单元格会被当公式执行（如 LLM 返回的 =HYPERLINK(...)），前置单引号降级为文本
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const csv = rows
-    .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+    .map((r) => r.map(csvCell).join(","))
     .join("\r\n");
   downloadFile("\uFEFF" + csv, "wordbook.csv", "text/csv;charset=utf-8");
   toast("已导出 CSV", "ok");
@@ -2066,7 +2093,9 @@ $("#export-anki").addEventListener("click", () => {
           )}</div>`
         : "",
     ].join("");
-    return `${w.word}\t${back}`;
+    // word 可经备份恢复写入任意字符：去制表/换行防止 TSV 错位，HTML 转义防 Anki「允许 HTML」渲染注入
+    const front = escapeHtml(String(w.word).replace(/[\t\r\n]+/g, " "));
+    return `${front}\t${back}`;
   });
   downloadFile(lines.join("\n"), "wordbook-anki.txt", "text/plain;charset=utf-8");
   toast("已导出 Anki（制表符分隔，导入时勾选“允许 HTML”）", "ok");

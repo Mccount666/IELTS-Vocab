@@ -1,0 +1,8 @@
+# Cloudflare Workers 静态资产响应头（资产层直接生效，不经过 Worker 代码）。
+# 与 src/worker.js 的 SECURITY_HEADERS 保持一致；CSP 里的 jsdelivr 供
+# pdf.js / mammoth / fflate 按需动态加载。
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
