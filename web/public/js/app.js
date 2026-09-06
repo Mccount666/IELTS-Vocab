@@ -208,6 +208,7 @@ function enterAuthMode(message = "") {
   wbWordMap = new Map();
   searchCache.clear();
   documentsCache = []; // 上一账号的文档列表别留给下一个账号（同名提醒/追加下拉都会用到）
+  statsCache = null; // 学习统计同理，别把上一账号的打卡/热力图带给下一个账号
   state.currentWord = "";
   state.lastResult = null;
   document.body.classList.add("auth-mode");

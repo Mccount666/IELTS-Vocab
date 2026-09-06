@@ -358,7 +358,10 @@ async function handleApi(request, env, url) {
     const body = await request.json().catch(() => ({}));
     const word = String(body.word || "").trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
-    let sentenceId = body.sentence_id ? Number(body.sentence_id) : null;
+    // sentence_id 必须是正整数：非数字的 truthy 值（如 "abc"）会得到 NaN，
+    // 既过不了所有权校验也没法绑定进 SQL，直接降级为无例句收藏
+    const sidNum = Number(body.sentence_id);
+    let sentenceId = Number.isInteger(sidNum) && sidNum > 0 ? sidNum : null;
     if (sentenceId) {
       // 只允许收藏自己文档里的例句
       const owned = await env.DB.prepare(
@@ -734,9 +737,14 @@ async function register(request, env) {
 
   let result;
   try {
+    // 站长判定与插入在同一条语句内原子完成：COUNT(*) 先读后插的写法下，
+    // 空库上的两个并发注册都会被判成首个用户，双双拿到 is_admin=1 并重复认领历史数据
     result = await env.DB
-      .prepare("INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)")
-      .bind(username, await hashPassword(password), isFirst ? 1 : 0, nowIso())
+      .prepare(
+        `INSERT INTO users (username, password_hash, is_admin, created_at)
+         SELECT ?, ?, CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 1 ELSE 0 END, ?`
+      )
+      .bind(username, await hashPassword(password), nowIso())
       .run();
   } catch (e) {
     // 并发注册同一用户名时 dup 查重拦不住，UNIQUE 约束兜底；别把数据库报错原文当 500 漏出去
@@ -744,9 +752,10 @@ async function register(request, env) {
     throw e;
   }
   const userId = result.meta.last_row_id;
+  const becameAdmin = Boolean((await env.DB.prepare("SELECT is_admin FROM users WHERE id = ?").bind(userId).first())?.is_admin);
 
   // 首个注册 = 站长，认领多用户改造前的历史数据与配置
-  if (isFirst) {
+  if (becameAdmin) {
     await env.DB.batch([
       env.DB.prepare("UPDATE documents SET user_id = ? WHERE user_id = 0").bind(userId),
       env.DB.prepare("UPDATE wordbook SET user_id = ? WHERE user_id = 0").bind(userId),
@@ -756,7 +765,7 @@ async function register(request, env) {
 
   const token = await createSession(env, userId);
   return json(
-    { ok: true, user: { id: userId, username, is_admin: isFirst } },
+    { ok: true, user: { id: userId, username, is_admin: becameAdmin } },
     200,
     { "Set-Cookie": sessionCookie(token) }
   );
