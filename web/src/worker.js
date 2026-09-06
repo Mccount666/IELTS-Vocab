@@ -232,7 +232,8 @@ async function handleApi(request, env, url) {
   // ---------- 文档导入 ----------
   if (pathname === "/api/documents" && method === "POST") {
     const body = await request.json().catch(() => ({}));
-    const filename = String(body.filename || "").trim().slice(0, 255);
+    // strField 类型门：filename 传对象不该变成 "[object Object]" 入库，而是直接 400
+    const filename = strField(body.filename, 255).trim();
     // exam_type 正常来自前端下拉框，但备份恢复等路径可能带入任意字符串：只放行安全字符集，其余归为 Other
     const rawExam = String(body.exam_type || "Other").trim().slice(0, 32);
     const examType = /^[A-Za-z0-9_-]+$/.test(rawExam) ? rawExam : "Other";
@@ -280,7 +281,7 @@ async function handleApi(request, env, url) {
   }
   if (m && method === "PATCH") {
     const body = await request.json().catch(() => ({}));
-    const filename = String(body.filename || "").trim().slice(0, 255);
+    const filename = strField(body.filename, 255).trim();
     if (!filename) throw new HttpError(400, "缺少 filename");
     const r = await env.DB
       .prepare("UPDATE documents SET filename = ? WHERE id = ? AND user_id = ?")
@@ -375,7 +376,8 @@ async function handleApi(request, env, url) {
 
   if (pathname === "/api/wordbook" && method === "POST") {
     const body = await request.json().catch(() => ({}));
-    const word = String(body.word || "").trim().toLowerCase().slice(0, 64);
+    // word 类型门：对象不该被 String() 兜底成 "[object object]" 入库
+    const word = strField(body.word, 255).trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
     // sentence_id 必须是正整数：非数字的 truthy 值（如 "abc"）会得到 NaN，
     // 既过不了所有权校验也没法绑定进 SQL，直接降级为无例句收藏
@@ -428,9 +430,10 @@ async function handleApi(request, env, url) {
   // 备份恢复：批量写入生词本，保留备份里的熟悉度 / 收藏时间（前端分块调用）
   if (pathname === "/api/wordbook/restore" && method === "POST") {
     const body = await request.json().catch(() => ({}));
-    // 空词行直接丢弃：/api/wordbook POST 拒绝空 word，恢复路径保持同一口径
+    // 空词行直接丢弃：/api/wordbook POST 拒绝空 word，恢复路径保持同一口径；
+    // word 走 strField 类型门，对象行同样丢弃而非 String() 成 "[object Object]"
     const rows = (Array.isArray(body.words) ? body.words : [])
-      .filter((r) => String(r?.word || "").trim())
+      .filter((r) => strField(r?.word, 255).trim())
       .slice(0, 200);
     if (!rows.length) return json({ ok: true, restored: 0 });
 
@@ -459,7 +462,7 @@ async function handleApi(request, env, url) {
     for (const c of chunks(rows, BATCH_CHUNK)) {
       await env.DB.batch(
         c.map((r) => {
-          const word = String(r.word || "").trim().toLowerCase().slice(0, 64);
+          const word = strField(r.word, 255).trim().toLowerCase().slice(0, 64);
           const sid = owned.has(Number(r.sentence_id)) ? Number(r.sentence_id) : null;
           const familiarity = Math.max(0, Math.min(5, Math.round(Number(r.familiarity) || 0)));
           restored += 1;
@@ -617,7 +620,8 @@ async function handleApi(request, env, url) {
   if (pathname === "/api/llm/define" && method === "POST") {
     const settings = await getUserSettings(env, user.id);
     const body = await request.json().catch(() => ({}));
-    const word = String(body.word || "").trim().toLowerCase().slice(0, 64);
+    // word 类型门：对象不该被 String() 兜底成 "[object object]" 入库
+    const word = strField(body.word, 255).trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
     const def = await llmDefine(settings, word);
     await cacheDefinition(env, def, user.id);
@@ -627,8 +631,9 @@ async function handleApi(request, env, url) {
   if (pathname === "/api/llm/translate" && method === "POST") {
     const settings = await getUserSettings(env, user.id);
     const body = await request.json().catch(() => ({}));
-    // 路由层就截断：翻译提示词上限 2000 字符，别让超大载荷先占内存再被下游丢弃
-    const text = String(body.text || "").trim().slice(0, 2000);
+    // 路由层就截断：翻译提示词上限 2000 字符，别让超大载荷先占内存再被下游丢弃；
+    // text 走 strField 类型门，对象不再变成 "[object Object]" 被送去翻译
+    const text = strField(body.text, 4000).trim().slice(0, 2000);
     if (!text) throw new HttpError(400, "缺少 text");
     const zh = await llmTranslate(settings, text);
     return json({ zh });
@@ -854,8 +859,8 @@ async function login(request, env) {
 async function appendSentences(env, userId, docId, sentences) {
   const clean = sentences
     .map((s) => ({
-      // 文本与词元做长度截断：合法分句结果远达不到上限，防异常载荷撑爆行体积
-      text: String(s?.text ?? "").trim().slice(0, 4000),
+      // text 与 tokens 都走类型门：对象不该被 String() 兜底成 "[object Object]" 存成句子
+      text: strField(s?.text, 4000).trim(),
       tokens: Array.isArray(s?.tokens)
         ? s.tokens
             .slice(0, 400)

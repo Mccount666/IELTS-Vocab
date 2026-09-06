@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS review_log (
     reviewed_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_review_log_user_date ON review_log(user_id, review_date);
+CREATE INDEX IF NOT EXISTS idx_review_log_user_reviewed ON review_log(user_id, reviewed_at); -- 007：r20 每日上限 COUNT 按 reviewed_at 计数，无此索引会扫该用户全部历史行
 
 -- 词典缓存：dictionaryapi.dev 在线释义全局共享；各用户 LLM 生成的释义按用户隔离
 --（created_by 006 引入，NULL = 可信共享条目），命中缓存不再消耗任何人的 Key 额度
