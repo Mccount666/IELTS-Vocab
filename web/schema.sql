@@ -98,8 +98,8 @@ CREATE TABLE IF NOT EXISTS review_log (
 );
 CREATE INDEX IF NOT EXISTS idx_review_log_user_date ON review_log(user_id, review_date);
 
--- 词典缓存（全局共享）：dictionaryapi.dev / 各用户 LLM 生成的释义统一落这里，
--- 命中缓存不再消耗任何人的 Key 额度
+-- 词典缓存：dictionaryapi.dev 在线释义全局共享；各用户 LLM 生成的释义按用户隔离
+--（created_by 006 引入，NULL = 可信共享条目），命中缓存不再消耗任何人的 Key 额度
 CREATE TABLE IF NOT EXISTS dictionary_cache (
     word TEXT PRIMARY KEY,
     phonetic TEXT NOT NULL DEFAULT '',
@@ -107,7 +107,8 @@ CREATE TABLE IF NOT EXISTS dictionary_cache (
     definition TEXT NOT NULL DEFAULT '',
     examples TEXT NOT NULL DEFAULT '[]',
     source TEXT NOT NULL DEFAULT '',
-    updated_at TEXT NOT NULL DEFAULT ''
+    updated_at TEXT NOT NULL DEFAULT '',
+    created_by INTEGER
 );
 
 -- 每用户运行时设置（LLM / MinerU API Key 等，键值对；Key 明文永不下发浏览器）

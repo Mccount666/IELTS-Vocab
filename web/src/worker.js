@@ -37,6 +37,7 @@ const SENTENCE_LIMIT = 200; // 单次搜索返回例句上限
 const MAX_DOCUMENTS = 500; // 每用户文档数
 const MAX_DOC_SENTENCES = 20000; // 单文档句子数（含追加）
 const MAX_WORDBOOK_WORDS = 20000; // 每用户生词数
+const MAX_REVIEWS_PER_DAY = 2000; // 每用户每天复习记录数（review_log 每次评分都插一行，无上限可被脚本刷爆）
 
 // 每用户可保存的设置键（Key 明文永不下发浏览器，GET 只回打码值）
 const USER_SETTING_KEYS = new Set([
@@ -108,6 +109,12 @@ function chunks(arr, size) {
 
 function nowIso() {
   return new Date().toISOString().replace("T", " ").slice(0, 19);
+}
+
+// 请求体字符串字段统一收口：非 string 类型（数字/对象/数组）直接丢弃，
+// 不走 String() 兜底——那会把对象变成 "[object Object]" 这类垃圾入库
+function strField(v, max) {
+  return typeof v === "string" ? v.slice(0, max) : "";
 }
 
 function maskSecret(value) {
@@ -405,9 +412,9 @@ async function handleApi(request, env, url) {
       .bind(
         user.id,
         word,
-        String(body.phonetic || "").slice(0, 128),
-        String(body.translation || "").slice(0, 2000),
-        String(body.definition || "").slice(0, 4000),
+        strField(body.phonetic, 128),
+        strField(body.translation, 2000),
+        strField(body.definition, 4000),
         sentenceId,
         nowIso()
       )
@@ -471,14 +478,14 @@ async function handleApi(request, env, url) {
           ).bind(
             user.id,
             word,
-            String(r.phonetic || "").slice(0, 128),
-            String(r.translation || "").slice(0, 2000),
-            String(r.definition || "").slice(0, 4000),
+            strField(r.phonetic, 128),
+            strField(r.translation, 2000),
+            strField(r.definition, 4000),
             sid,
-            String(r.added_at || nowIso()).slice(0, 32),
+            typeof r.added_at === "string" && r.added_at.trim() ? r.added_at.slice(0, 32) : nowIso(),
             familiarity,
-            String(r.last_reviewed_at || "").slice(0, 32),
-            String(r.next_review_at || "").slice(0, 32)
+            strField(r.last_reviewed_at, 32),
+            strField(r.next_review_at, 32)
           );
         })
       );
@@ -515,6 +522,16 @@ async function handleApi(request, env, url) {
       .bind(id, user.id)
       .first();
     if (!row) throw new HttpError(404, "生词不存在或不属于你");
+    // 按 reviewed_at（服务端 UTC 时间）计数而非 review_date：review_date 是客户端传的本地日期，
+    // 脚本改变日期参数就能绕过；UTC 自然日是伪造不了的硬窗口
+    const utcDayStart = `${nowIso().slice(0, 10)} 00:00:00`;
+    const dayCount = await env.DB
+      .prepare("SELECT COUNT(*) AS n FROM review_log WHERE user_id = ? AND reviewed_at >= ?")
+      .bind(user.id, utcDayStart)
+      .first();
+    if ((dayCount?.n || 0) >= MAX_REVIEWS_PER_DAY) {
+      throw new HttpError(429, `今日复习记录已达上限（${MAX_REVIEWS_PER_DAY} 次），请明天再来`);
+    }
     const now = nowIso();
     await env.DB.batch([
       env.DB
@@ -593,7 +610,7 @@ async function handleApi(request, env, url) {
   if (pathname === "/api/dictionary" && method === "GET") {
     const word = (url.searchParams.get("word") || "").trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
-    return json({ definition: await getDefinitionCached(env, word) });
+    return json({ definition: await getDefinitionCached(env, word, user.id) });
   }
 
   // ---------- LLM 代理（用当前用户自己配置的 Key） ----------
@@ -603,7 +620,7 @@ async function handleApi(request, env, url) {
     const word = String(body.word || "").trim().toLowerCase().slice(0, 64);
     if (!word) throw new HttpError(400, "缺少 word");
     const def = await llmDefine(settings, word);
-    await cacheDefinition(env, def);
+    await cacheDefinition(env, def, user.id);
     return json({ definition: def });
   }
 
@@ -658,6 +675,9 @@ async function handleApi(request, env, url) {
   }
 
   if (pathname === "/api/mineru/download" && method === "GET") {
+    // 与 upload-urls / upload / batch 同一口径：未配置 Token 的登录用户不开放该中继
+    const settings = await getUserSettings(env, user.id);
+    if (!settings.mineru_api_token) throw new HttpError(400, "尚未配置 MinerU API Token");
     const target = url.searchParams.get("url") || "";
     if (!isMineruDownloadUrlAllowed(target)) throw new HttpError(400, "下载地址不在 MinerU 允许的域名内");
     const upstream = await fetch(target, { signal: AbortSignal.timeout(120000) });
@@ -1034,7 +1054,7 @@ async function searchWord(env, userId, rawWord, examType) {
     const sentences = await findSentencesByPhrase(env, userId, word, examType);
     return { definition: null, sentences, phrase: true };
   }
-  const definition = await getDefinitionCached(env, word);
+  const definition = await getDefinitionCached(env, word, userId);
   let sentences = await findSentences(env, userId, word, examType);
   let lemmaUsed = false;
   if (!sentences.length) {
@@ -1058,12 +1078,14 @@ async function searchWord(env, userId, rawWord, examType) {
 async function searchByChinese(env, userId, term, examType) {
   const escaped = term.replace(/[\\%_]/g, (ch) => "\\" + ch);
   const pattern = `%${escaped}%`;
-  const candidates = await env.DB.prepare(
-    `SELECT word, phonetic, translation FROM dictionary_cache
-     WHERE translation LIKE ? ESCAPE '\\' OR definition LIKE ? ESCAPE '\\'
-     ORDER BY updated_at DESC LIMIT 12`
-  )
-    .bind(pattern, pattern)
+  const candidates = await env.DB
+    .prepare(
+      `SELECT word, phonetic, translation FROM dictionary_cache
+       WHERE (translation LIKE ? ESCAPE '\\' OR definition LIKE ? ESCAPE '\\')
+         AND (created_by IS NULL OR created_by = ?)
+       ORDER BY updated_at DESC LIMIT 12`
+    )
+    .bind(pattern, pattern, userId)
     .all();
   const words = candidates.results.map((r) => r.word);
   if (!words.length) {
@@ -1136,20 +1158,27 @@ function shapeDefinition(row) {
   };
 }
 
-async function cacheDefinition(env, def) {
+async function cacheDefinition(env, def, createdBy = null) {
   // 字段统一截断：LLM / 在线词典返回的内容长度不可控，防异常响应撑爆 D1 行
   // （examples 截断后的 JSON 解析失败时 shapeDefinition 会安全降级为空数组）
   const examples = (Array.isArray(def.examples) ? def.examples : []).slice(0, 8);
+  // createdBy = null 表示可信共享写入（在线词典，内容来自固定上游），总是覆盖；
+  // 用户级写入（LLM 生成，内容来自用户自配的任意服务）只覆盖自己的历史行，
+  // 既不能把全局可信条目替换成只有写入者能读的隔离行，也不能把别的用户的
+  // 私有条目改姓（word 全局唯一，B 的写入若覆盖 A 的行，A 的缓存就凭空消失）
+  const trusted = createdBy == null;
   await env.DB.prepare(
-    `INSERT INTO dictionary_cache (word, phonetic, translation, definition, examples, source, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO dictionary_cache (word, phonetic, translation, definition, examples, source, updated_at, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(word) DO UPDATE SET
        phonetic = excluded.phonetic,
        translation = CASE WHEN excluded.translation != '' THEN excluded.translation ELSE dictionary_cache.translation END,
        definition = excluded.definition,
        examples = excluded.examples,
        source = excluded.source,
-       updated_at = excluded.updated_at`
+       updated_at = excluded.updated_at,
+       created_by = excluded.created_by
+     WHERE ? = 1 OR (dictionary_cache.created_by IS NOT NULL AND dictionary_cache.created_by = ?)`
   )
     .bind(
       String(def.word || "").toLowerCase().slice(0, 64),
@@ -1158,13 +1187,21 @@ async function cacheDefinition(env, def) {
       String(def.definition || "").slice(0, 4000),
       JSON.stringify(examples).slice(0, 8000),
       String(def.source || "").slice(0, 128),
-      nowIso()
+      nowIso(),
+      trusted ? null : createdBy,
+      trusted ? 1 : 0,
+      createdBy
     )
     .run();
 }
 
-async function getDefinitionCached(env, word) {
-  const row = await env.DB.prepare("SELECT * FROM dictionary_cache WHERE word = ?").bind(word).first();
+// 读缓存只放行「可信共享条目 + 自己的 LLM 条目」：dictionary_cache 按 word 全局唯一，
+// 不过滤的话任何用户都能借 /api/llm/define 把常用词的释义污染成任意内容给全站看
+async function getDefinitionCached(env, word, userId) {
+  const row = await env.DB
+    .prepare("SELECT * FROM dictionary_cache WHERE word = ? AND (created_by IS NULL OR created_by = ?)")
+    .bind(word, userId)
+    .first();
   if (row) return shapeDefinition(row);
   const online = await lookupOnline(word);
   if (!online) return null;

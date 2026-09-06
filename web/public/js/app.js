@@ -214,6 +214,10 @@ function enterAuthMode(message = "") {
   searchCache.clear();
   documentsCache = []; // 上一账号的文档列表别留给下一个账号（同名提醒/追加下拉都会用到）
   statsCache = null; // 学习统计同理，别把上一账号的打卡/热力图带给下一个账号
+  // 「最近查过」也是上一账号的使用痕迹，与其他缓存同一口径：换号即清
+  try {
+    localStorage.removeItem(RECENT_KEY);
+  } catch {}
   state.currentWord = "";
   state.lastResult = null;
   document.body.classList.add("auth-mode");
@@ -2435,7 +2439,11 @@ async function restoreFromBackup(file) {
   refreshStudyStats(); // 连续打卡 / 今日待复习等统计
 
   // 极简 hash 路由：#q=abandon 直达搜索结果；#import / #wordbook / #settings 直达对应页
-  const hash = decodeURIComponent(location.hash.slice(1));
+  // decodeURIComponent 对畸形 hash（如 #q=%zz）会抛 URIError，吞掉否则整个启动流程中断
+  let hash = "";
+  try {
+    hash = decodeURIComponent(location.hash.slice(1));
+  } catch {}
   if (hash.startsWith("q=")) {
     const word = hash.slice(2);
     $("#search-input").value = word;
