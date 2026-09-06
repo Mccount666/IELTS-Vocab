@@ -9,6 +9,16 @@ const fs = require("node:fs");
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, "config.json"), "utf8"));
 const SITE_URL = process.env.IELTS_SITE_URL || config.siteUrl;
+// 导航守卫按 origin 精确比较：startsWith 前缀匹配会被
+// https://<site>.evil.com 这类仿冒域绕过，把任意网页放进应用窗口钓鱼
+const SITE_ORIGIN = new URL(SITE_URL).origin;
+function isSameSite(url) {
+  try {
+    return new URL(url).origin === SITE_ORIGIN;
+  } catch {
+    return false;
+  }
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -29,12 +39,12 @@ function createWindow() {
 
   // 站内跳转放行，外部链接一律交给系统浏览器，避免窗口被导航去别的网站
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(SITE_URL)) return { action: "allow" };
+    if (isSameSite(url)) return { action: "allow" };
     shell.openExternal(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith(SITE_URL)) {
+    if (!isSameSite(url)) {
       event.preventDefault();
       shell.openExternal(url);
     }

@@ -1234,7 +1234,8 @@ async function searchByChinese(env, userId, term, examType) {
      JOIN word_sentences ws ON ws.word_id = w.id
      JOIN sentences s ON s.id = ws.sentence_id
      JOIN documents d ON d.id = s.document_id
-     WHERE w.word IN (${words.map(() => "?").join(",")}) AND d.user_id = ?${examFilterSql(examType)}`
+     WHERE w.word IN (${words.map(() => "?").join(",")}) AND d.user_id = ?${examFilterSql(examType)}
+     LIMIT ${SENTENCE_LIMIT * 10}`
   )
     .bind(...words, userId, ...(examType ? [examType] : []))
     .all();
