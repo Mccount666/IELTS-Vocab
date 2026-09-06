@@ -40,6 +40,16 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+// 字符串常量时间比较：先各自 SHA-256 拉平到等长摘要再逐字节比，
+// 直接比较会随首个不同字节提前返回，注册码可被逐字符计时猜测
+export async function timingSafeEqualStr(a, b) {
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(String(a))),
+    crypto.subtle.digest("SHA-256", enc.encode(String(b))),
+  ]);
+  return timingSafeEqual(new Uint8Array(da), new Uint8Array(db));
+}
+
 // 密码哈希格式：pbkdf2:<iterations>:<salt b64>:<hash b64>（迭代次数随存储走，方便日后整体升级）
 export async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));

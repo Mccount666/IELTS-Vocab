@@ -23,6 +23,7 @@ import {
   clearSessionCookie,
   getUser,
   requireUser,
+  timingSafeEqualStr,
 } from "./auth.js";
 
 // D1 安全阈值：单条 SQL 最多 100 个绑定参数；batch/IN 查询都按更小的块切
@@ -634,7 +635,11 @@ async function handleApi(request, env, url) {
     if (!settings.mineru_api_token) throw new HttpError(400, "尚未配置 MinerU API Token，请到「设置」页填写");
     const target = url.searchParams.get("url") || "";
     if (!isMineruDownloadUrlAllowed(target)) throw new HttpError(400, "上传地址不在 MinerU 允许的域名内");
-    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    // Content-Length 必须是非负整数：Number() 对垃圾头得 NaN、对 "-1" 得负数，
+    // 两者与 200MB 的比较都是 false，等于没有上限——先做类型门再做大小门
+    const clRaw = request.headers.get("Content-Length");
+    const contentLength = clRaw === null ? 0 : Number(clRaw);
+    if (!Number.isInteger(contentLength) || contentLength < 0) throw new HttpError(400, "Content-Length 不合法");
     if (contentLength > 200 * 1024 * 1024) throw new HttpError(413, "文件过大（上限 200MB）");
     const upstream = await fetch(target, {
       method: "PUT",
@@ -752,7 +757,7 @@ async function register(request, env) {
 
   if (!isFirst) {
     const required = await getSiteSetting(env, "registration_code");
-    if (required && regCode !== required) {
+    if (required && !(await timingSafeEqualStr(regCode, required))) {
       throw new HttpError(403, "本站已开启注册码，请向站长索取后填写");
     }
   }
@@ -832,7 +837,12 @@ async function appendSentences(env, userId, docId, sentences) {
       // 文本与词元做长度截断：合法分句结果远达不到上限，防异常载荷撑爆行体积
       text: String(s?.text ?? "").trim().slice(0, 4000),
       tokens: Array.isArray(s?.tokens)
-        ? s.tokens.slice(0, 400).map((t) => String(t).toLowerCase().slice(0, 64))
+        ? s.tokens
+            .slice(0, 400)
+            .map((t) => String(t).toLowerCase().slice(0, 64))
+            // 词表全局共享（word UNIQUE）：只收与前端 WORD_RE 同形的英文词，
+            // 任意 Unicode token 会作为垃圾行永久留在 words 表里
+            .filter((t) => /^[a-z]+(?:'[a-z]+)?$/.test(t))
         : [],
     }))
     .filter((s) => s.text);
@@ -941,20 +951,22 @@ async function deleteDocument(env, userId, docId) {
     .bind(docId, userId)
     .first();
   if (!doc) throw new HttpError(404, "文档不存在或不属于你");
-  const sentenceRows = await env.DB.prepare("SELECT id FROM sentences WHERE document_id = ?")
-    .bind(docId)
-    .all();
-  const sids = sentenceRows.results.map((r) => r.id);
-  for (const c of chunks(sids, IN_CHUNK)) {
-    const qs = c.map(() => "?").join(",");
-    await env.DB.prepare(`DELETE FROM word_sentences WHERE sentence_id IN (${qs})`).bind(...c).run();
-    // 生词本收藏的例句随文档删除，悬空引用一并置空（LEFT JOIN 时不再查空气行）
-    await env.DB.prepare(`UPDATE wordbook SET sentence_id = NULL WHERE user_id = ? AND sentence_id IN (${qs})`)
-      .bind(userId, ...c)
-      .run();
-  }
-  await env.DB.prepare("DELETE FROM sentences WHERE document_id = ?").bind(docId).run();
-  await env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(docId).run();
+  // 子查询代替「先取全部句子 id 再分块」：一条语句删完索引/悬空引用/句子，
+  // 两万句的文档不再需要 400+ 次往返（走 idx_sentences_document / idx_word_sentences_sentence 索引）
+  await env.DB.batch([
+    env.DB
+      .prepare("DELETE FROM word_sentences WHERE sentence_id IN (SELECT id FROM sentences WHERE document_id = ?)")
+      .bind(docId),
+    env.DB
+      .prepare(
+        "UPDATE wordbook SET sentence_id = NULL WHERE user_id = ? AND sentence_id IN (SELECT id FROM sentences WHERE document_id = ?)"
+      )
+      .bind(userId, docId),
+    env.DB.prepare("DELETE FROM sentences WHERE document_id = ?").bind(docId),
+    env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(docId),
+  ]);
+  // 词表全局共享：删除后失去全部例句引用的词成为不可达的孤儿行，顺手清掉
+  await env.DB.prepare("DELETE FROM words WHERE id NOT IN (SELECT word_id FROM word_sentences)").run();
 }
 
 // ---------------------------------------------------------------------------
