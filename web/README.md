@@ -117,6 +117,22 @@ web/
 └── docs/                   # INTEGRATIONS.md（第三方接口）· CUSTOM-DOMAIN.md（域名绑定）
 ```
 
+## 测试与验收
+
+```bash
+npm test                     # 文本管线单测（与桌面版 Python 输出逐例对齐）
+bash test/run-regression-r21.sh   # 旧冒烟回归循环（r8/r17-r20，各自全新库逐个跑）
+
+# 单轮定向冒烟（先起全新库的 dev server，再跑对应脚本；r26 需 --test-scheduled）：
+npx wrangler d1 execute ielts_vocab --local --persist-to .tmp-state --file=schema.sql
+npx wrangler dev --port 8788 --test-scheduled --persist-to .tmp-state &
+node test/api-smoke-r21.mjs .tmp-state   # r21-r28 各有定向冒烟：test/api-smoke-r*.mjs
+```
+
+- `test/api-smoke-r5.mjs` 起为全链路 30 断言，其后每轮迭代各带定向冒烟（r17 并发注册/r18 配额/r19 索引与孤儿词/r20 词典所有权/r21 类型门/r22 CSP hash 自洽/r23 失败锁定+流式导出/r24 覆盖索引/r25 LLM 上限/r26 推送订阅/r27 提醒到期过滤/r28 订阅生命周期）。
+- 冒烟断言首注册即站长、各轮要求全新库——共用库必假失败，回归循环脚本已处理。
+- 无头浏览器快验（不依赖 Playwright）：`msedge --headless=new --dump-dom http://127.0.0.1:8788/`——`data-theme` 属性出现即 CSP hash 未拦内联脚本，chips 渲染即 ES module 正常执行。
+
 ## 与桌面版的关系
 
 桌面版（仓库根目录的 `*.py`）继续可用，两者数据结构同构：
