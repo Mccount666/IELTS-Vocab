@@ -1259,18 +1259,30 @@ async function vapidAuthHeader(endpoint, env) {
   return `vapid t=${input}.${b64urlEncode(new Uint8Array(sig))}, k=${env.VAPID_PUBLIC_KEY}`;
 }
 
-// 每日提醒：给订阅设备逐台发空推送，404/410（订阅已失效）顺手清理。
+// 每日提醒：只推有到期词的用户的订阅设备（零到期也每日弹通知是纯噪音；
+// 到期口径与 /api/push/due-count 一致，UTC+8 近似），404/410（订阅失效）顺手清理。
 // 免费版每次调用最多约 50 个子请求，单轮只处理 40 台设备——用户规模上来后
 // 把 cron 调密并按 id 游标分批
 async function sendReviewReminders(env) {
   if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
-  const subs = await env.DB.prepare("SELECT id, endpoint FROM push_subscriptions ORDER BY id LIMIT 40")
+  const subs = await env.DB
+    .prepare(
+      `SELECT DISTINCT ps.id, ps.endpoint FROM push_subscriptions ps
+       JOIN wordbook w ON w.user_id = ps.user_id
+       WHERE w.next_review_at = '' OR substr(w.next_review_at, 1, 10) <= ?
+       ORDER BY ps.id LIMIT 40`
+    )
+    .bind(utc8Today())
     .all()
     .then((r) => r.results);
+  // 同一推送服务域（绝大多数设备同属一个 origin）共用一张 JWT，不必每台重签
+  const jwtCache = new Map();
   for (const s of subs) {
     let auth = null;
     try {
-      auth = await vapidAuthHeader(s.endpoint, env);
+      const origin = new URL(s.endpoint).origin;
+      if (!jwtCache.has(origin)) jwtCache.set(origin, await vapidAuthHeader(s.endpoint, env));
+      auth = jwtCache.get(origin);
       const resp = await fetch(s.endpoint, {
         method: "POST",
         headers: { TTL: "86400", Urgency: "normal", Authorization: auth },

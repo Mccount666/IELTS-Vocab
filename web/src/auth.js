@@ -65,9 +65,13 @@ export async function hashPassword(password) {
 export async function verifyPassword(password, stored) {
   const [scheme, iterStr, saltB64, hashB64] = String(stored || "").split(":");
   if (scheme !== "pbkdf2" || !iterStr || !saltB64 || !hashB64) return false;
+  // 迭代数是存进哈希串的数字：损坏/被改写过的行（0、负数、超大值）不能让
+  // deriveBits 抛错把登录打成 500，更不能让超大迭代数变成 CPU 放大器
+  const iterations = Number(iterStr);
+  if (!Number.isInteger(iterations) || iterations < 1 || iterations > 2_000_000) return false;
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: b64ToBytes(saltB64), iterations: Number(iterStr) },
+    { name: "PBKDF2", hash: "SHA-256", salt: b64ToBytes(saltB64), iterations },
     key,
     256
   );
