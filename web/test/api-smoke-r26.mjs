@@ -97,7 +97,7 @@ db.close();
 
 console.log("— 前端静态断言 —");
 const swText = await (await fetch(BASE + "/sw.js")).text();
-ok(swText.includes('VERSION = "v20"') && swText.includes('addEventListener("push"') && swText.includes("notificationclick"), "sw v20 带 push/notifyclick 处理器");
+ok(swText.includes('addEventListener("push"') && swText.includes("notificationclick") && /VERSION = "v\d+"/.test(swText), "sw 带 push/notifyclick 处理器（版本由当轮冒烟断言）");
 const html = await (await fetch(BASE + "/")).text();
 ok(html.includes('id="push-card"') && html.includes('id="push-toggle"'), "设置页有复习提醒卡");
 

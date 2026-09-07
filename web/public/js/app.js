@@ -219,6 +219,7 @@ function enterAuthMode(message = "") {
     localStorage.removeItem(RECENT_KEY);
   } catch {}
   hideSuggest(); // 联想下拉别挂着上一账号词表里的词
+  teardownPush(); // 401/登出路径：会话已失效，服务端解绑会失败，但浏览器侧订阅能解除（fire-and-forget）
   state.currentWord = "";
   state.lastResult = null;
   document.body.classList.add("auth-mode");
@@ -295,6 +296,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
 });
 
 $("#logout-btn").addEventListener("click", async () => {
+  await teardownPush(); // 会话还有效时先解除推送订阅（服务端行 + 浏览器订阅）
   try {
     await api("/api/auth/logout", { method: "POST" });
   } catch {}
@@ -2304,6 +2306,26 @@ async function initPushCard() {
   } catch {
     card.hidden = true;
   }
+}
+
+// 解除本浏览器的推送订阅（服务端记录 + 浏览器订阅一起清）：订阅绑定「账号 + 浏览器」，
+// 登出/会话过期后不再替原账号收提醒；换账号后由新账号自行重新开启
+async function teardownPush() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && (await reg.pushManager.getSubscription());
+    if (!sub) return;
+    try {
+      await api("/api/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      });
+    } catch {}
+    try {
+      await sub.unsubscribe();
+    } catch {}
+  } catch {}
 }
 
 $("#push-toggle").addEventListener("click", async () => {

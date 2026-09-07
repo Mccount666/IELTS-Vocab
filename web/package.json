@@ -10,6 +10,7 @@
     "db:migrate:local": "wrangler d1 execute ielts_vocab --local --file=schema.sql",
     "db:migrate:remote": "wrangler d1 execute ielts_vocab --remote --file=schema.sql",
     "db:migrate:multiuser": "wrangler d1 execute ielts_vocab --remote --file=migrations/001-multiuser.sql",
+    "db:migrate:file": "wrangler d1 execute ielts_vocab --remote --file",
     "db:migrate:review": "wrangler d1 execute ielts_vocab --remote --file=migrations/002-review.sql",
     "db:migrate:srs": "wrangler d1 execute ielts_vocab --remote --file=migrations/003-srs.sql",
     "test": "node --test test/pipeline.test.mjs"
