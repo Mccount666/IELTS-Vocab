@@ -520,10 +520,24 @@ function llmProtocol(settings) {
   return 'openai';
 }
 
+function isPrivateHost(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  if (h === 'localhost' || h === '::1' || h === '[::1]') return true;
+  const parts = h.split('.').map((x) => Number(x));
+  if (parts.length === 4 && parts.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+    const [a, b] = parts;
+    return a === 0 || a === 10 || a === 127 || a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168;
+  }
+  return false;
+}
+
 function buildLlmRequest(settings, system, user) {
   const baseUrl = String(settings.llmBaseUrl || '').replace(/\/+$/, '');
-  // 只允许 https 且拒绝内网/云元数据地址，防止把云函数当 SSRF 跳板
-  if (!/^https:\/\/(?!localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[?::1\]?)/i.test(baseUrl)) {
+  let parsed;
+  try { parsed = new URL(baseUrl); } catch (e) { parsed = null; }
+  // 只允许 https 且拒绝内网/云元数据地址，防止把云函数当 SSRF 跳板；必须用 URL 解析后的
+  // hostname 判断，0x7f000001 这类写法会被 URL 解析器规范化，原始字符串正则拦不住
+  if (!parsed || parsed.protocol !== 'https:' || isPrivateHost(parsed.hostname)) {
     throw Object.assign(new Error('LLM Base URL 必须是 https:// 开头的公网地址'), { statusCode: 400 });
   }
   const model = settings.llmModel || (llmProtocol(settings) === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini');
@@ -570,7 +584,9 @@ function buildLlmRequest(settings, system, user) {
 
 async function llmChat(settings, system, user) {
   const req = buildLlmRequest(settings, system, user);
-  const resp = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
+  const resp = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body, timeout: 30000 }).catch((err) => {
+    throw Object.assign(new Error(err && err.type === 'request-timeout' ? 'LLM 请求超时（30 秒）' : `LLM 请求失败：${err.message || err}`), { statusCode: 502 });
+  });
   if (!resp.ok) {
     const detail = (await resp.text().catch(() => '')).slice(0, 300);
     throw Object.assign(new Error(`LLM 请求失败（${resp.status}）：${detail}`), { statusCode: 502 });
