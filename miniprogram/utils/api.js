@@ -25,6 +25,7 @@ module.exports = {
   deleteWordbook: (data) => call('wordbook.delete', data),
   getSettings: () => call('settings.get'),
   saveSettings: (data) => call('settings.save', data),
+  llmModels: (data) => call('llm.models', data),
   llmDefine: (data) => call('llm.define', data),
   llmTranslate: (data) => call('llm.translate', data),
   dictionaryLookup: (data) => call('dictionary.lookup', data),

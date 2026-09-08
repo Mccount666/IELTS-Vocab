@@ -51,6 +51,7 @@ exports.main = async (event) => {
       'stats.get': () => stats(openid, data),
       'settings.get': () => getSettings(openid),
       'settings.save': () => saveSettings(openid, data),
+      'llm.models': () => llmModels(openid, data),
       'llm.define': () => llmDefine(openid, data),
       'llm.translate': () => llmTranslate(openid, data),
       'dictionary.lookup': () => dictionaryLookup(openid, data),
@@ -580,6 +581,46 @@ function buildLlmRequest(settings, system, user) {
     }),
     parse: (json) => (json.choices && json.choices[0] && json.choices[0].message ? json.choices[0].message.content : ''),
   };
+}
+
+async function llmModels(openid, data) {
+  const saved = await getSettingsRow(openid);
+  const settings = {
+    ...saved,
+    llmProtocol: data.llmProtocol || saved.llmProtocol,
+    llmBaseUrl: data.llmBaseUrl || saved.llmBaseUrl,
+    // 用户刚填的 Key 尚未保存时，也允许只用于本次拉取模型列表；不写库、不回显
+    llmApiKey: data.llmApiKey || saved.llmApiKey,
+  };
+  if (!settings.llmApiKey) throw Object.assign(new Error('请先填写 LLM API Key'), { statusCode: 400 });
+  const baseUrl = String(settings.llmBaseUrl || '').replace(/\/+$/, '');
+  let parsed;
+  try { parsed = new URL(baseUrl); } catch (e) { parsed = null; }
+  if (!parsed || parsed.protocol !== 'https:' || isPrivateHost(parsed.hostname)) {
+    throw Object.assign(new Error('LLM Base URL 必须是 https:// 开头的公网地址'), { statusCode: 400 });
+  }
+
+  const protocol = llmProtocol(settings);
+  const url = protocol === 'anthropic' ? `${baseUrl}/v1/models` : `${baseUrl}/models`;
+  const headers = protocol === 'anthropic'
+    ? { 'x-api-key': settings.llmApiKey, 'anthropic-version': '2023-06-01' }
+    : { authorization: `Bearer ${settings.llmApiKey}` };
+  const resp = await fetch(url, { headers, timeout: 15000 }).catch((err) => {
+    throw Object.assign(new Error(err && err.type === 'request-timeout' ? '拉取模型列表超时（15 秒）' : `拉取模型列表失败：${err.message || err}`), { statusCode: 502 });
+  });
+  if (!resp.ok) {
+    const detail = (await resp.text().catch(() => '')).slice(0, 200);
+    throw Object.assign(new Error(`拉取模型列表失败（${resp.status}）：${detail}`), { statusCode: 502 });
+  }
+  const json = await resp.json().catch(() => null);
+  const arr = Array.isArray(json && json.data) ? json.data : [];
+  const models = arr
+    .map((m) => String((m && (m.id || m.name)) || '').trim())
+    .filter(Boolean)
+    .filter((id, i, a) => a.indexOf(id) === i)
+    .slice(0, 100);
+  if (!models.length) throw Object.assign(new Error('模型列表为空，请检查 Base URL 是否支持 /models 接口'), { statusCode: 502 });
+  return { models };
 }
 
 async function llmChat(settings, system, user) {

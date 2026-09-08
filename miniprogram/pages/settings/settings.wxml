@@ -22,8 +22,14 @@
     <view class="muted protocol-desc">{{protocols[protocolIndex].desc}}</view>
 
     <input class="input" placeholder="Base URL（如 https://api.openai.com/v1）" value="{{form.llmBaseUrl}}" bindinput="onInput" data-field="llmBaseUrl" />
-    <input class="input" placeholder="模型名（如 gpt-4o-mini / claude-sonnet-4）" value="{{form.llmModel}}" bindinput="onInput" data-field="llmModel" />
     <input class="input" password placeholder="API Key，留空则不修改" value="{{form.llmApiKey}}" bindinput="onInput" data-field="llmApiKey" />
+    <view class="model-row">
+      <picker class="model-picker" mode="selector" range="{{modelOptions}}" value="{{modelIndex < 0 ? 0 : modelIndex}}" bindchange="onModelChange" disabled="{{!modelOptions.length}}">
+        <view class="picker-like">模型：{{form.llmModel || '请先拉取模型列表'}}</view>
+      </picker>
+      <view class="small-btn {{loadingModels ? 'disabled' : ''}}" bindtap="loadModels">{{loadingModels ? '拉取中' : '拉取模型'}}</view>
+    </view>
+    <view class="muted">填写 Base URL 和 API Key 后拉取模型列表；选中模型后再保存。若服务商不支持 /models，可先拉取失败后联系我适配。</view>
 
     <view class="link-block stack">
       <view class="muted">没有 Key？点下面按钮复制链接，再粘贴到手机浏览器打开申请：</view>
