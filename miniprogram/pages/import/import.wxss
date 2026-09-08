@@ -14,9 +14,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
-  padding: 18rpx 20rpx;
-  border-radius: 18rpx;
-  background: #f0fbf7;
+  padding: 20rpx 22rpx;
+  border-radius: 20rpx;
+  background: #f8fdfb;
+  border: 1rpx solid #e2f3ee;
 }
 
 .file-info {
@@ -96,18 +97,40 @@
   justify-content: space-between;
   gap: 20rpx;
   align-items: center;
-  padding: 22rpx 0;
-  border-bottom: 1rpx solid #e5f2ef;
+  padding: 24rpx 22rpx;
+  border-radius: 20rpx;
+  background: #f8fdfb;
+  border: 1rpx solid #e2f3ee;
 }
 
-.doc:last-child {
-  border-bottom: 0;
+.doc-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 10rpx;
+}
+
+.doc-exam {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #0f766e;
+  background: #d9f6ee;
+  border-radius: 999rpx;
+  padding: 4rpx 18rpx;
 }
 
 .doc-name {
   font-size: 30rpx;
   font-weight: 700;
   color: #1f3d44;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-delete {

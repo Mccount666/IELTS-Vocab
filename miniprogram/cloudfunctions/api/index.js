@@ -17,6 +17,7 @@ const COLLECTIONS = [
   'user_settings',
   'site_settings',
   'dictionary_cache',
+  'public_dictionary',
 ];
 
 const WORD_RE = /[a-zA-Z]+(?:'[a-z]+)?/g;
@@ -652,10 +653,10 @@ async function llmDefine(openid, data) {
   const settings = await getSettingsRow(openid);
   if (!settings.llmApiKey) throw Object.assign(new Error('尚未配置 LLM API Key，请到「我的」页填写'), { statusCode: 400 });
   const word = requireText(data.word, 'word').toLowerCase().slice(0, 80);
-  const cached = await db.collection('dictionary_cache').where({ word }).limit(1).get();
+  // LLM 缓存按用户隔离：只读本用户的 LLM 缓存，避免污染公共/免费词典结果
+  const cached = await db.collection('dictionary_cache').where({ word, sourceType: 'llm', createdBy: openid }).limit(1).get();
   if (cached.data.length) {
-    const c = cached.data[0];
-    return { word, phonetic: c.phonetic, translation: c.translation, definition: c.definition, examples: JSON.parse(c.examples || '[]'), source: c.source, cached: true };
+    return shapeDictRow(cached.data[0], `LLM（${settings.llmModel || 'default'}）`);
   }
   const system = '你是一位严谨的英汉词典编辑。只输出一个 JSON 对象，不要输出任何其他文字。';
   const user =
@@ -673,7 +674,7 @@ async function llmDefine(openid, data) {
     examples: Array.isArray(parsed.examples) ? parsed.examples.slice(0, 4) : [],
     source: `LLM（${settings.llmModel || 'default'}）`,
   };
-  await db.collection('dictionary_cache').add({ data: { ...entry, examples: JSON.stringify(entry.examples), updatedAt: nowIso() } });
+  await db.collection('dictionary_cache').add({ data: { ...entry, examples: JSON.stringify(entry.examples), sourceType: 'llm', createdBy: openid, updatedAt: nowIso() } });
   return { ...entry, cached: false };
 }
 
@@ -686,14 +687,47 @@ async function llmTranslate(openid, data) {
   return { translation: content.trim() };
 }
 
+// 公共词库：站长预置词条（不与任何用户内容混合），查词第一优先级
+function parseExamples(raw) {
+  try {
+    const arr = JSON.parse(raw || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function shapeDictRow(row, fallbackSource) {
+  return {
+    word: row.word,
+    phonetic: row.phonetic || '',
+    translation: row.translation || '',
+    definition: row.definition || '',
+    examples: parseExamples(row.examples),
+    source: row.source || fallbackSource,
+    cached: true,
+  };
+}
+
+async function getPublicDictionaryEntry(word) {
+  const exact = await db.collection('public_dictionary').where({ word }).limit(1).get();
+  if (exact.data.length) return shapeDictRow(exact.data[0], '公共词库');
+  const lemma = lemmatize(word);
+  if (lemma && lemma !== word) {
+    const byLemma = await db.collection('public_dictionary').where({ lemma }).limit(1).get();
+    if (byLemma.data.length) return shapeDictRow(byLemma.data[0], '公共词库');
+  }
+  return null;
+}
+
 // 免费词典兜底：dictionaryapi.dev（无需 Key），结果写进 dictionary_cache
 async function dictionaryLookup(openid, data) {
   const word = requireText(data.word, 'word').toLowerCase().slice(0, 80);
-  const cached = await db.collection('dictionary_cache').where({ word }).limit(1).get();
-  if (cached.data.length) {
-    const c = cached.data[0];
-    return { word, phonetic: c.phonetic, translation: c.translation, definition: c.definition, examples: JSON.parse(c.examples || '[]'), source: c.source, cached: true };
-  }
+  const pub = await getPublicDictionaryEntry(word);
+  if (pub) return pub;
+  // 只读公共/免费缓存，排除按用户隔离的 LLM 缓存
+  const cached = await db.collection('dictionary_cache').where({ word, sourceType: _.neq('llm') }).limit(1).get();
+  if (cached.data.length) return shapeDictRow(cached.data[0], '');
   const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { timeout: 2000 }).catch(() => null);
   const arr = resp && resp.ok ? await resp.json().catch(() => null) : null;
   if (!Array.isArray(arr) || !arr.length) return { word, translation: '', definition: '', examples: [], source: '', cached: false, notFound: true };
@@ -716,7 +750,7 @@ async function dictionaryLookup(openid, data) {
     examples,
     source: 'dictionaryapi.dev',
   };
-  await db.collection('dictionary_cache').add({ data: { ...entry, examples: JSON.stringify(entry.examples), updatedAt: nowIso() } });
+  await db.collection('dictionary_cache').add({ data: { ...entry, examples: JSON.stringify(entry.examples), sourceType: 'free', updatedAt: nowIso() } });
   return { ...entry, cached: false };
 }
 

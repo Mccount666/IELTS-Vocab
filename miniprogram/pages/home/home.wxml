@@ -23,8 +23,17 @@
 
   <view class="card stack">
     <view class="section-title">使用方法</view>
-    <view class="step">1. 粘贴文本或上传 PDF / 图片建立索引</view>
-    <view class="step">2. 输入单词，查看来自原文的例句</view>
-    <view class="step">3. 一键收录进生词本，随时回看</view>
+    <view class="step">
+      <view class="step-num">1</view>
+      <view class="step-text">粘贴文本或上传 PDF / 图片建立索引</view>
+    </view>
+    <view class="step">
+      <view class="step-num">2</view>
+      <view class="step-text">输入单词，查看来自原文的例句</view>
+    </view>
+    <view class="step">
+      <view class="step-num">3</view>
+      <view class="step-text">一键收录进生词本，随时回看</view>
+    </view>
   </view>
 </view>

@@ -13,7 +13,7 @@
       <view class="between">
         <view class="word-main">
           <view class="word">{{item.word}}</view>
-          <view class="muted" wx:if="{{item.phonetic}}">{{item.phonetic}}</view>
+          <view class="phon-chip" wx:if="{{item.phonetic}}">{{item.phonetic}}</view>
         </view>
         <view class="btn danger delete-btn" hover-class="btn-hover" data-id="{{item._id}}" bindtap="deleteWord">删除</view>
       </view>

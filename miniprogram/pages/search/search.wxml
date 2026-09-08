@@ -34,8 +34,8 @@
 
     <view class="dict-box stack" wx:if="{{dict}}">
       <view class="between">
-        <view class="muted">{{dict.source || '词典'}}</view>
-        <view class="chip" bindtap="aiDefine">AI 释义</view>
+        <view class="dict-source">{{dict.source || '词典'}}</view>
+        <view class="chip ai-chip" hover-class="chip-hover" bindtap="aiDefine">✨ AI 解释</view>
       </view>
       <view wx:if="{{dict.phonetic}}" class="phonetic">{{dict.phonetic}}</view>
       <view wx:if="{{dict.translation}}" class="dict-translation">{{dict.translation}}</view>
@@ -48,7 +48,25 @@
       </view>
     </view>
     <view class="muted center" wx:elif="{{dictLoading}}">释义加载中…</view>
-    <view class="btn secondary ai-fallback" hover-class="btn-hover" wx:elif="{{!dictLoading && !dict}}" bindtap="aiDefine">AI 释义</view>
+    <view class="muted center" wx:elif="{{!dictLoading && !dict}}">暂无词典结果，可点下方「✨ AI 解释」生成</view>
+
+    <view class="dict-box ai-box stack" wx:if="{{aiDict}}">
+      <view class="between">
+        <view class="ai-source">✨ AI 解释 · {{aiDict.source || 'LLM'}}</view>
+        <view class="muted ai-hint">AI 生成，仅供参考</view>
+      </view>
+      <view wx:if="{{aiDict.phonetic}}" class="phonetic">{{aiDict.phonetic}}</view>
+      <view wx:if="{{aiDict.translation}}" class="dict-translation">{{aiDict.translation}}</view>
+      <view wx:if="{{aiDict.definition}}" class="muted">{{aiDict.definition}}</view>
+      <view class="stack example-stack" wx:if="{{aiDict.examples.length}}">
+        <view class="example" wx:for="{{aiDict.examples}}" wx:key="en" wx:for-item="ex">
+          <view>{{ex.en}}</view>
+          <view class="muted" wx:if="{{ex.zh}}">{{ex.zh}}</view>
+        </view>
+      </view>
+    </view>
+    <view class="muted center" wx:elif="{{aiLoading}}">AI 解释生成中…</view>
+    <view class="btn secondary ai-fallback" hover-class="btn-hover" wx:if="{{!aiDict && !aiLoading && !dict && !dictLoading}}" bindtap="aiDefine">✨ AI 解释</view>
   </view>
 
   <view class="stack" wx:if="{{sentenceViews.length}}">

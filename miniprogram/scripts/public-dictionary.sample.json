@@ -1,0 +1,122 @@
+[
+  {
+    "word": "environment",
+    "lemma": "environment",
+    "phonetic": "/ɪnˈvaɪrənmənt/",
+    "translation": "n. 环境；自然环境；周围状况",
+    "definition": "The surroundings or conditions in which a person, animal, or plant lives or operates.",
+    "examples": [
+      { "en": "Children need a safe and stimulating learning environment.", "zh": "儿童需要一个安全且能激发兴趣的学习环境。" },
+      { "en": "The government has introduced policies to protect the environment.", "zh": "政府出台了保护环境政策。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "significant",
+    "lemma": "significant",
+    "phonetic": "/sɪɡˈnɪfɪkənt/",
+    "translation": "adj. 重要的；显著的；有重大意义的",
+    "definition": "Sufficiently great or important to be worthy of attention; having a particular meaning.",
+    "examples": [
+      { "en": "There has been a significant increase in house prices.", "zh": "房价出现了显著上涨。" },
+      { "en": "The study found no significant difference between the two groups.", "zh": "研究发现两组之间没有显著差异。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "available",
+    "lemma": "available",
+    "phonetic": "/əˈveɪləbl/",
+    "translation": "adj. 可获得的；可用的；有空的",
+    "definition": "Able to be used or obtained; at someone's disposal; free to be seen or talked to.",
+    "examples": [
+      { "en": "The report is available online free of charge.", "zh": "这份报告可在网上免费获取。" },
+      { "en": "The doctor is not available at the moment.", "zh": "医生现在没空。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "require",
+    "lemma": "require",
+    "phonetic": "/rɪˈkwaɪə/",
+    "translation": "v. 需要；要求；规定",
+    "definition": "To need something or make something necessary; to officially demand something.",
+    "examples": [
+      { "en": "The job requires excellent communication skills.", "zh": "这份工作需要出色的沟通能力。" },
+      { "en": "All passengers are required to show their tickets.", "zh": "所有乘客都必须出示车票。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "approach",
+    "lemma": "approach",
+    "phonetic": "/əˈprəʊtʃ/",
+    "translation": "v. 接近；靠近；着手处理 n. 方法；途径",
+    "definition": "To come near to in distance or time; a way of dealing with something.",
+    "examples": [
+      { "en": "The deadline is approaching fast.", "zh": "截止日期很快就要到了。" },
+      { "en": "We need a new approach to the problem.", "zh": "我们需要用新方法来处理这个问题。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "establish",
+    "lemma": "establish",
+    "phonetic": "/ɪˈstæblɪʃ/",
+    "translation": "v. 建立；设立；确立；证实",
+    "definition": "To set up an organization, system or rule; to prove or show something to be true.",
+    "examples": [
+      { "en": "The charity was established in 1998.", "zh": "这家慈善机构成立于 1998 年。" },
+      { "en": "The evidence established his innocence.", "zh": "证据证实了他的清白。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "contribute",
+    "lemma": "contribute",
+    "phonetic": "/kənˈtrɪbjuːt/",
+    "translation": "v. 贡献；捐献；促成；投稿",
+    "definition": "To give something, especially money or help, to achieve something; to be one of the causes of something.",
+    "examples": [
+      { "en": "Everyone is encouraged to contribute ideas.", "zh": "鼓励每个人提出想法。" },
+      { "en": "Air pollution contributes to respiratory diseases.", "zh": "空气污染会导致呼吸系统疾病。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "phenomenon",
+    "lemma": "phenomenon",
+    "phonetic": "/fəˈnɒmɪnən/",
+    "translation": "n. 现象；非凡的事物（复数 phenomena）",
+    "definition": "A fact or event that can be observed, especially one that is unusual or studied scientifically.",
+    "examples": [
+      { "en": "Globalization is a complex social phenomenon.", "zh": "全球化是一种复杂的社会现象。" },
+      { "en": "The northern lights are a natural phenomenon.", "zh": "北极光是一种自然现象。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "consequence",
+    "lemma": "consequence",
+    "phonetic": "/ˈkɒnsɪkwəns/",
+    "translation": "n. 结果；后果；重要性",
+    "definition": "A result or effect, usually one that is unwelcome or important.",
+    "examples": [
+      { "en": "He had to face the consequences of his decision.", "zh": "他必须面对自己决定的后果。" },
+      { "en": "Climate change could have serious consequences for coastal cities.", "zh": "气候变化可能给沿海城市带来严重后果。" }
+    ],
+    "source": "公共词库"
+  },
+  {
+    "word": "demonstrate",
+    "lemma": "demonstrate",
+    "phonetic": "/ˈdemənstreɪt/",
+    "translation": "v. 证明；演示；示范；示威",
+    "definition": "To show clearly by giving proof or examples; to show how something works.",
+    "examples": [
+      { "en": "The experiment demonstrates the principle clearly.", "zh": "这个实验清楚地演示了这一原理。" },
+      { "en": "The data demonstrates a clear trend.", "zh": "数据证明了明显的趋势。" }
+    ],
+    "source": "公共词库"
+  }
+]

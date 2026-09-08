@@ -11,7 +11,31 @@ function hideLoading() {
 }
 
 function examTypeLabel(value) {
-  const map = { IELTS: 'IELTS', TOEFL: 'TOEFL', GRE: 'GRE', Other: '其他' };
+  const map = {
+    IELTS: '雅思 IELTS',
+    TOEFL: '托福 TOEFL',
+    GRE: 'GRE',
+    GMAT: 'GMAT',
+    SAT: 'SAT',
+    ACT: 'ACT',
+    AP: 'AP',
+    'A-Level': 'A-Level',
+    IB: 'IB',
+    Gaokao: '高考',
+    Zhongkao: '中考',
+    'CET-4': '大学英语四级 CET-4',
+    'CET-6': '大学英语六级 CET-6',
+    Kaoyan: '考研英语',
+    'TEM-4': '专四 TEM-4',
+    'TEM-8': '专八 TEM-8',
+    BEC: '商务英语 BEC',
+    TOEIC: '托业 TOEIC',
+    PTE: 'PTE',
+    Duolingo: 'Duolingo English Test',
+    LSAT: 'LSAT',
+    MCAT: 'MCAT',
+    Other: '其他',
+  };
   return map[value] || value || '其他';
 }
 

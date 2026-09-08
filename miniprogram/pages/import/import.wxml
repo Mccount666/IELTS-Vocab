@@ -67,9 +67,12 @@
   <view class="card stack" wx:if="{{documents.length}}">
     <view class="section-title">已导入文档</view>
     <view class="doc" wx:for="{{documents}}" wx:key="_id">
-      <view>
+      <view class="doc-main">
         <view class="doc-name">{{item.filename}}</view>
-        <view class="muted">{{item.examType}} · {{item.sentenceCount || 0}} 句</view>
+        <view class="doc-meta">
+          <view class="doc-exam">{{item.examTypeLabel}}</view>
+          <view class="muted">{{item.sentenceCount || 0}} 句</view>
+        </view>
       </view>
       <view class="btn danger doc-delete" hover-class="btn-hover" data-id="{{item._id}}" bindtap="deleteDoc">删除</view>
     </view>

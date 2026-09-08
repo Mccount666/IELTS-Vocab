@@ -1,6 +1,6 @@
 page {
   min-height: 100vh;
-  background: #f2fbf8;
+  background: linear-gradient(180deg, #eefaf5 0%, #f2fbf8 240rpx, #f2fbf8 100%);
   color: #1f3d44;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
@@ -14,8 +14,8 @@ page {
   background: #ffffff;
   border-radius: 28rpx;
   padding: 28rpx;
-  box-shadow: 0 16rpx 48rpx rgba(13, 148, 136, 0.10);
-  border: 1rpx solid rgba(13, 148, 136, 0.12);
+  box-shadow: 0 10rpx 36rpx rgba(13, 148, 136, 0.08);
+  border: 1rpx solid rgba(13, 148, 136, 0.10);
 }
 
 .section-title {
@@ -23,6 +23,18 @@ page {
   line-height: 1.35;
   font-weight: 700;
   color: #1f3d44;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.section-title::before {
+  content: '';
+  width: 8rpx;
+  height: 30rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #2dd4bf, #0d9488);
+  flex-shrink: 0;
 }
 
 .muted {
@@ -38,6 +50,7 @@ page {
   font-size: 28rpx;
   line-height: 2.6;
   margin: 0;
+  font-weight: 600;
   /* 原生 button 自带约 184px 的 min-width（UA 级样式），普通覆盖无效，
      必须 !important 才能压住，否则小尺寸按钮/网格轨道被撑破 */
   min-width: 0 !important;
@@ -45,7 +58,14 @@ page {
 
 .primary-btn {
   color: #ffffff;
-  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.28);
+}
+
+.primary-btn::after,
+.secondary-btn::after,
+.danger-btn::after {
+  border: none;
 }
 
 .secondary-btn {
@@ -64,7 +84,8 @@ page {
   width: 100%;
   box-sizing: border-box;
   border-radius: 20rpx;
-  background: #eafcf6;
+  background: #f8fdfb;
+  border: 1rpx solid #d9ece7;
   color: #1f3d44;
   padding: 22rpx 24rpx;
   font-size: 28rpx;
@@ -94,7 +115,7 @@ page {
 }
 
 .chip {
-  padding: 12rpx 22rpx;
+  padding: 12rpx 24rpx;
   border-radius: 999rpx;
   background: #eafcf6;
   color: #567882;
@@ -102,8 +123,9 @@ page {
 }
 
 .chip.active {
-  background: #0d9488;
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
   color: #ffffff;
+  box-shadow: 0 6rpx 18rpx rgba(13, 148, 136, 0.25);
 }
 
 .stack {
@@ -151,17 +173,19 @@ mark,
   padding: 20rpx 32rpx;
   box-sizing: border-box;
   text-align: center;
+  font-weight: 600;
   transition: opacity 0.15s ease;
 }
 
 .btn.primary {
   color: #ffffff;
-  background: linear-gradient(135deg, #14b8a6, #2dd4bf);
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.28);
 }
 
 .btn.secondary {
   color: #0d9488;
-  background: #eafcf6;
+  background: #e6fffb;
 }
 
 .btn.danger {

@@ -1,11 +1,30 @@
 const api = require('../../utils/api');
 const { buildSentencesPayload } = require('../../utils/pipeline');
-const { toast, loading, hideLoading } = require('../../utils/format');
+const { toast, loading, hideLoading, examTypeLabel } = require('../../utils/format');
 
 const examTypes = [
-  { label: 'IELTS', value: 'IELTS' },
-  { label: 'TOEFL', value: 'TOEFL' },
+  { label: '雅思 IELTS', value: 'IELTS' },
+  { label: '托福 TOEFL', value: 'TOEFL' },
   { label: 'GRE', value: 'GRE' },
+  { label: 'GMAT', value: 'GMAT' },
+  { label: 'SAT', value: 'SAT' },
+  { label: 'ACT', value: 'ACT' },
+  { label: 'AP', value: 'AP' },
+  { label: 'A-Level', value: 'A-Level' },
+  { label: 'IB', value: 'IB' },
+  { label: '高考', value: 'Gaokao' },
+  { label: '中考', value: 'Zhongkao' },
+  { label: '大学英语四级 CET-4', value: 'CET-4' },
+  { label: '大学英语六级 CET-6', value: 'CET-6' },
+  { label: '考研英语', value: 'Kaoyan' },
+  { label: '专四 TEM-4', value: 'TEM-4' },
+  { label: '专八 TEM-8', value: 'TEM-8' },
+  { label: '商务英语 BEC', value: 'BEC' },
+  { label: '托业 TOEIC', value: 'TOEIC' },
+  { label: 'PTE', value: 'PTE' },
+  { label: 'Duolingo English Test', value: 'Duolingo' },
+  { label: 'LSAT', value: 'LSAT' },
+  { label: 'MCAT', value: 'MCAT' },
   { label: '其他', value: 'Other' },
 ];
 
@@ -262,7 +281,8 @@ Page({
   async refreshDocuments() {
     try {
       const res = await api.listDocuments();
-      this.setData({ documents: res.documents || [] });
+      const documents = (res.documents || []).map((d) => ({ ...d, examTypeLabel: examTypeLabel(d.examType) }));
+      this.setData({ documents });
     } catch (err) {
       console.warn(err);
     }

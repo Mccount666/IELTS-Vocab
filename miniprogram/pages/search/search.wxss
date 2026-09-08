@@ -38,9 +38,60 @@
 }
 
 .dict-box {
-  padding: 24rpx;
+  padding: 28rpx;
   border-radius: 24rpx;
   background: #f0fbf7;
+  border: 1rpx solid rgba(13, 148, 136, 0.10);
+}
+
+.dict-source {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: #0d9488;
+  background: #ffffff;
+  border-radius: 999rpx;
+  padding: 8rpx 22rpx;
+  align-self: flex-start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 380rpx;
+}
+
+.ai-chip {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92610e;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.chip-hover {
+  opacity: 0.7;
+}
+
+.ai-box {
+  background: linear-gradient(160deg, #fffbeb, #fef3c7);
+  border: 1rpx solid rgba(217, 160, 32, 0.22);
+}
+
+.ai-source {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #92610e;
+}
+
+.ai-hint {
+  font-size: 22rpx;
+  flex-shrink: 0;
+}
+
+.ai-box .phonetic {
+  color: #b45309;
+}
+
+.ai-box .example {
+  background: rgba(255, 255, 255, 0.75);
 }
 
 .phonetic {
@@ -64,6 +115,7 @@
   padding: 16rpx 20rpx;
   border-radius: 16rpx;
   background: #ffffff;
+  border-left: 6rpx solid #99e9d9;
   font-size: 28rpx;
   line-height: 1.6;
   color: #27454e;

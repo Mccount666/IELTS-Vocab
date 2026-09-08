@@ -1,19 +1,34 @@
 .word-card {
-  padding: 26rpx;
+  padding: 28rpx;
 }
 
 .word-main {
   min-width: 0;
 }
 
+.phon-chip {
+  display: inline-block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #0f766e;
+  background: #d9f6ee;
+  border-radius: 999rpx;
+  padding: 4rpx 20rpx;
+}
+
 .delete-btn {
   width: 128rpx;
   font-size: 24rpx;
   padding: 14rpx 0;
+  flex-shrink: 0;
 }
 
 .definition {
-  margin-top: 18rpx;
+  margin-top: 20rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 16rpx;
+  background: #f6fdfb;
+  border: 1rpx solid #e2f3ee;
   color: #27454e;
   font-size: 28rpx;
   line-height: 1.65;

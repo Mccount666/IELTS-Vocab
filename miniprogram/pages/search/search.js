@@ -4,9 +4,28 @@ const { toast } = require('../../utils/format');
 
 const examTypes = [
   { label: '全部考试', value: 'All' },
-  { label: 'IELTS', value: 'IELTS' },
-  { label: 'TOEFL', value: 'TOEFL' },
+  { label: '雅思 IELTS', value: 'IELTS' },
+  { label: '托福 TOEFL', value: 'TOEFL' },
   { label: 'GRE', value: 'GRE' },
+  { label: 'GMAT', value: 'GMAT' },
+  { label: 'SAT', value: 'SAT' },
+  { label: 'ACT', value: 'ACT' },
+  { label: 'AP', value: 'AP' },
+  { label: 'A-Level', value: 'A-Level' },
+  { label: 'IB', value: 'IB' },
+  { label: '高考', value: 'Gaokao' },
+  { label: '中考', value: 'Zhongkao' },
+  { label: '大学英语四级 CET-4', value: 'CET-4' },
+  { label: '大学英语六级 CET-6', value: 'CET-6' },
+  { label: '考研英语', value: 'Kaoyan' },
+  { label: '专四 TEM-4', value: 'TEM-4' },
+  { label: '专八 TEM-8', value: 'TEM-8' },
+  { label: '商务英语 BEC', value: 'BEC' },
+  { label: '托业 TOEIC', value: 'TOEIC' },
+  { label: 'PTE', value: 'PTE' },
+  { label: 'Duolingo English Test', value: 'Duolingo' },
+  { label: 'LSAT', value: 'LSAT' },
+  { label: 'MCAT', value: 'MCAT' },
   { label: '其他', value: 'Other' },
 ];
 
@@ -47,6 +66,8 @@ Page({
     dict: null,
     dictLoading: false,
     dictMode: '',
+    aiDict: null,
+    aiLoading: false,
     translations: {},
     nearWords: [],
   },
@@ -109,7 +130,7 @@ Page({
   async submit() {
     const word = this.data.word.trim().toLowerCase();
     if (!word) return toast('请输入单词');
-    this.setData({ loading: true, searched: true, suggestions: [], dict: null, dictMode: '', translations: {} });
+    this.setData({ loading: true, searched: true, suggestions: [], dict: null, dictMode: '', aiDict: null, aiLoading: false, translations: {} });
     try {
       const examType = examTypes[this.data.examIndex].value;
       const result = await api.search({ word, examType });
@@ -136,42 +157,34 @@ Page({
     }
   },
 
-  // 释义卡：先免费词典；未命中且有 LLM Key 时自动 AI 释义，都失败留按钮
+  // 释义卡：公共词库 → 免费词典缓存 → dictionaryapi.dev，不再自动调 LLM
   async loadDict(word) {
     this.setData({ dictLoading: true, dict: null, dictMode: '' });
-    let dict = null;
-    let mode = '';
     try {
-      const free = await api.dictionaryLookup({ word });
-      if (free && !free.notFound) {
-        dict = free;
-        mode = 'free';
+      const dict = await api.dictionaryLookup({ word });
+      if (dict && !dict.notFound) {
+        this.setData({ dict, dictMode: dict.cached ? 'cache' : 'free' });
       }
     } catch (err) {
-      console.warn('free dict failed:', err.errMsg || err.message);
-    }
-    if (!dict) {
-      try {
-        const ai = await api.llmDefine({ word });
-        dict = ai;
-        mode = 'llm';
-      } catch (err) {
-        console.warn('ai define unavailable:', err.errMsg || err.message);
-      }
-    }
-    this.setData({ dict, dictMode: mode, dictLoading: false });
-  },
-
-  async aiDefine() {
-    if (!this.data.result.word) return;
-    this.setData({ dictLoading: true });
-    try {
-      const dict = await api.llmDefine({ word: this.data.result.word });
-      this.setData({ dict, dictMode: 'llm' });
-    } catch (err) {
-      toast(err.message || 'AI 释义失败');
+      console.warn('dict lookup failed:', err.errMsg || err.message);
     } finally {
       this.setData({ dictLoading: false });
+    }
+  },
+
+  // AI 解释：用户点按钮才调用 LLM，结果单独展示，不覆盖词典卡
+  async aiDefine() {
+    const word = (this.data.result.word || '').toLowerCase();
+    if (!word || this.data.aiLoading) return;
+    if (this.data.aiDict && this.data.aiDict.word === word) return;
+    this.setData({ aiLoading: true });
+    try {
+      const ai = await api.llmDefine({ word });
+      this.setData({ aiDict: ai });
+    } catch (err) {
+      toast(err.message || 'AI 解释失败');
+    } finally {
+      this.setData({ aiLoading: false });
     }
   },
 
@@ -192,7 +205,7 @@ Page({
   async collectWord() {
     if (!this.data.result.word) return;
     try {
-      const dict = this.data.dict || {};
+      const dict = this.data.dict || this.data.aiDict || {};
       await api.addWordbook({
         word: this.data.result.word,
         phonetic: dict.phonetic || '',

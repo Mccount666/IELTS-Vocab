@@ -10,14 +10,45 @@
 }
 
 .hero {
-  background: linear-gradient(145deg, #eafff7, #ffffff 58%, #ecf5ff);
+  background: linear-gradient(145deg, #ccfbf1 0%, #e6fffb 45%, #f0f9ff 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -70rpx;
+  right: -70rpx;
+  width: 260rpx;
+  height: 260rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.30), rgba(45, 212, 191, 0));
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: -90rpx;
+  left: -40rpx;
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.28), rgba(125, 211, 252, 0));
 }
 
 .hero-kicker {
-  color: #0d9488;
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  color: #0f766e;
   font-size: 22rpx;
   letter-spacing: 4rpx;
   font-weight: 800;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1rpx solid rgba(13, 148, 136, 0.18);
+  padding: 8rpx 22rpx;
+  border-radius: 999rpx;
 }
 
 .hero-title {
@@ -50,13 +81,17 @@
 
 .stat {
   text-align: center;
-  padding: 24rpx 12rpx;
+  padding: 28rpx 12rpx;
+  background: linear-gradient(160deg, #f0fbf7, #ffffff);
 }
 
 .stat-value {
-  font-size: 42rpx;
+  font-size: 46rpx;
   font-weight: 900;
-  color: #0d9488;
+  background: linear-gradient(135deg, #14b8a6, #0f766e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .stat-label {
@@ -66,9 +101,31 @@
 }
 
 .step {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
   padding: 22rpx 24rpx;
   border-radius: 20rpx;
-  background: #f0fbf7;
+  background: #f6fdfb;
+  border: 1rpx solid #e2f3ee;
   color: #3f6570;
   font-size: 28rpx;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.step-text {
+  flex: 1;
+  min-width: 0;
 }
