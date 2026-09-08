@@ -54,7 +54,22 @@ Page({
     const url = e.currentTarget.dataset.url;
     wx.setClipboardData({
       data: url,
-      success: () => toast('链接已复制，请在浏览器打开', 'none'),
+      success: () => {
+        wx.showModal({
+          title: '链接已复制',
+          content: `微信小程序不能直接打开外部浏览器。请打开手机浏览器，粘贴访问：\n${url}`,
+          showCancel: false,
+          confirmText: '知道了',
+        });
+      },
+      fail: () => {
+        wx.showModal({
+          title: '请手动复制链接',
+          content: url,
+          showCancel: false,
+          confirmText: '知道了',
+        });
+      },
     });
   },
 

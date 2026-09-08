@@ -26,7 +26,7 @@
     <input class="input" password placeholder="API Key，留空则不修改" value="{{form.llmApiKey}}" bindinput="onInput" data-field="llmApiKey" />
 
     <view class="link-block stack">
-      <view class="muted">没有 Key？点一下复制链接，到浏览器打开申请：</view>
+      <view class="muted">没有 Key？点下面按钮复制链接，再粘贴到手机浏览器打开申请：</view>
       <view class="link-row">
         <view class="link-chip" data-url="https://platform.openai.com/api-keys" bindtap="copyLink">OpenAI</view>
         <view class="link-chip" data-url="https://console.anthropic.com/settings/keys" bindtap="copyLink">Anthropic</view>
@@ -52,7 +52,7 @@
     <input class="input" password placeholder="MinerU API Token，留空则不修改" value="{{form.mineruApiToken}}" bindinput="onInput" data-field="mineruApiToken" />
 
     <view class="link-block stack">
-      <view class="muted">获取 Token：</view>
+      <view class="muted">获取 Token：复制链接后到手机浏览器打开</view>
       <view class="link-row">
         <view class="link-chip" data-url="https://mineru.net" bindtap="copyLink">mineru.net</view>
       </view>
