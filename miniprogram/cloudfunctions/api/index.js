@@ -790,9 +790,22 @@ async function dictionaryLookup(openid, data) {
   // 只读公共/免费缓存，排除按用户隔离的 LLM 缓存
   const cached = await db.collection('dictionary_cache').where({ word, sourceType: _.neq('llm') }).limit(1).get();
   if (cached.data.length) return shapeDictRow(cached.data[0], '');
+  // 本人 LLM 缓存提前于 dictionaryapi.dev 读取：云上到 dictionaryapi.dev 不可达，
+  // 每次白等 2s 超时；命中过 LLM 兜底的词二次查询直接返回
+  const ownLlm = await db.collection('dictionary_cache').where({ word, sourceType: 'llm', createdBy: openid }).limit(1).get();
+  if (ownLlm.data.length) return shapeDictRow(ownLlm.data[0], '');
   const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { timeout: 2000 }).catch(() => null);
   const arr = resp && resp.ok ? await resp.json().catch(() => null) : null;
-  if (!Array.isArray(arr) || !arr.length) return { word, translation: '', definition: '', examples: [], source: '', cached: false, notFound: true };
+  if (!Array.isArray(arr) || !arr.length) {
+    // 第三道兜底：免费词典未命中且用户配置了 LLM Key 时自动生成，
+    // 结果走 llmDefine 的个人缓存（sourceType:'llm'+createdBy），同一词下次毫秒级命中；
+    // 未配置 Key 或 LLM 失败时保持原 notFound 行为
+    try {
+      return await llmDefine(openid, { word });
+    } catch (err) {
+      return { word, translation: '', definition: '', examples: [], source: '', cached: false, notFound: true };
+    }
+  }
   const e = arr[0];
   const phonetic = e.phonetic || (e.phonetics || []).map((p) => p.text).find(Boolean) || '';
   const meanings = e.meanings || [];
