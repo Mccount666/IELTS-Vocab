@@ -133,6 +133,8 @@ Page({
     this.setData({ loading: true, searched: true, suggestions: [], dict: null, dictMode: '', aiDict: null, aiLoading: false, translations: {} });
     try {
       const examType = examTypes[this.data.examIndex].value;
+      // 例句与释义并行请求：释义 ~0.5s、例句 ~0.7s，串行会让释义卡白等例句
+      const dictPromise = this.loadDict(word);
       const result = await api.search({ word, examType });
       const terms = result.terms && result.terms.length ? result.terms : [result.word, result.lemma];
       const sentenceViews = (result.sentences || []).map((s) => ({
@@ -142,7 +144,6 @@ Page({
       }));
       this.setData({ result, sentences: result.sentences || [], sentenceViews, nearWords: [] });
       this.pushHistory(word);
-      this.loadDict(word);
       // 查不到例句时，用真题词表推荐相近词
       if (!result.sentences || !result.sentences.length) {
         try {
