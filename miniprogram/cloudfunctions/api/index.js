@@ -18,6 +18,7 @@ const COLLECTIONS = [
   'site_settings',
   'dictionary_cache',
   'public_dictionary',
+  'word_forms',
 ];
 
 const WORD_RE = /[a-zA-Z]+(?:'[a-z]+)?/g;
@@ -106,6 +107,54 @@ function lemmatize(word) {
   if (word.length > 5 && word.endsWith('ing')) return word.slice(0, -3);
   if (word.length > 4 && word.endsWith('ed')) return word.length > 5 ? word.slice(0, -2) : word;
   return word;
+}
+
+// 规则变形生成（与 scripts/build-word-forms.mjs 保持一致）：
+// 多生成的形态在倒排索引里查不到，无副作用；查 ran/went/good 这类
+// 规则推导不出的词形关系由 word_forms 表兜底
+function ruleExpand(word) {
+  const out = new Set([word]);
+  out.add(`${word}s`);
+  out.add(`${word}es`);
+  if (word.endsWith('y') && word.length > 2) out.add(`${word.slice(0, -1)}ies`);
+  if (word.endsWith('e')) {
+    out.add(`${word}d`);
+    out.add(`${word.slice(0, -1)}ing`);
+  } else {
+    out.add(`${word}ed`);
+    out.add(`${word}ing`);
+    const prev = word.slice(-2, -1);
+    const last = word.slice(-1);
+    if (word.length >= 3 && !/[aeiouwxy]$/.test(prev) && !/[aeiouwxy]$/.test(last)) {
+      out.add(`${word}${last}ed`);
+      out.add(`${word}${last}ing`);
+    }
+  }
+  return out;
+}
+
+// 查询词形态扩展：word_forms（不规则词表，ECDICT exchange 提取）两轮合并
+// + 规则变形兜底，返回 ≤40 个候选词形，一次 _.in 命中倒排索引全部变体
+async function wordFormCandidates(query) {
+  const forms = new Set([query, lemmatize(query)]);
+  let frontier = [query, lemmatize(query)];
+  for (let round = 0; round < 2 && frontier.length; round++) {
+    const uniq = Array.from(new Set(frontier)).filter((w) => /^[a-z]+(?:'[a-z]+)?(?:-[a-z]+)*$/.test(w)).slice(0, 30);
+    if (!uniq.length) break;
+    const rows = await db.collection('word_forms').where({ word: _.in(uniq) }).limit(30).get();
+    const next = [];
+    for (const row of rows.data) {
+      for (const f of Array.isArray(row.forms) ? row.forms : []) {
+        if (!forms.has(f)) {
+          forms.add(f);
+          next.push(f);
+        }
+      }
+    }
+    frontier = next;
+  }
+  for (const g of ruleExpand(lemmatize(query))) forms.add(g);
+  return Array.from(forms).filter((w) => w.length >= 2 && w.length <= 40).slice(0, 40);
 }
 
 function tokenizeWords(text) {
@@ -319,24 +368,37 @@ async function search(openid, data) {
   let sentences = [];
 
   if (isPhrase) {
-    // 短语：全部 token 都命中的句子视为短语出现
+    // 短语：全部 token（含各自词形变体）都命中的句子视为短语出现
     const tokens = Array.from(new Set(tokenizeWords(query).filter((w) => w.length >= 2)));
     if (tokens.length) {
-      const where = { _openid: openid, word: _.in(tokens) };
+      const tokenForms = [];
+      const formToToken = new Map();
+      for (let ti = 0; ti < tokens.length; ti++) {
+        const forms = await wordFormCandidates(tokens[ti]);
+        for (const f of forms) if (!formToToken.has(f)) formToToken.set(f, ti);
+      }
+      const union = Array.from(formToToken.keys());
+      const where = { _openid: openid, word: _.in(union) };
       if (examType && examType !== 'All') where.examType = examType;
-      const rows = await db.collection('word_index').where(where).limit(500).get();
-      const counts = new Map();
-      for (const r of rows.data) counts.set(r.sentenceId, (counts.get(r.sentenceId) || 0) + 1);
-      const ids = [...counts.entries()].filter(([, c]) => c >= tokens.length).map(([id]) => id).slice(0, 50);
+      const rows = await db.collection('word_index').where(where).limit(800).get();
+      const covered = new Map(); // sentenceId → 命中的不同 token 数
+      for (const r of rows.data) {
+        const ti = formToToken.get(r.word);
+        if (ti === undefined) continue;
+        if (!covered.has(r.sentenceId)) covered.set(r.sentenceId, new Set());
+        covered.get(r.sentenceId).add(ti);
+      }
+      const ids = [...covered.entries()].filter(([, s]) => s.size >= tokens.length).map(([id]) => id).slice(0, 50);
       sentences = ids.length
         ? (await db.collection('sentences').where({ _openid: openid, _id: _.in(ids) }).limit(50).get()).data
         : [];
-      terms = tokens;
+      terms = union.slice(0, 40);
     }
   } else {
     const lemma = lemmatize(query);
-    terms = Array.from(new Set([query, lemma].filter(Boolean)));
-    const where = { _openid: openid, word: _.in(terms) };
+    const candidates = await wordFormCandidates(query);
+    terms = candidates;
+    const where = { _openid: openid, word: _.in(candidates) };
     if (examType && examType !== 'All') where.examType = examType;
     let index = await db.collection('word_index').where(where).limit(200).get();
     if (!index.data.length && lemma !== query) {
