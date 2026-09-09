@@ -28,3 +28,4 @@ Thumbs.db
 
 # 本地 wrangler dev 密钥（勿提交）
 .dev.vars
+.ecdict-data/
