@@ -735,9 +735,16 @@ async function llmTest(openid, data) {
   }
   const json = await resp.json().catch(() => null);
   if (!json) throw Object.assign(new Error('返回不是合法 JSON（中转站可能返回了错误页或登录页 HTML）'), { statusCode: 502 });
+  // 只校验接口结构：有 choices（OpenAI）或 content（Anthropic）即算链路连通。
+  // 正文可能为空（推理型模型把 max_tokens 额度花在思考上），不影响连通性结论
+  const shapeOk = Array.isArray(json.choices) || Array.isArray(json.content);
+  if (!shapeOk) throw Object.assign(new Error('返回结构异常：既无 choices 也无 content 字段，可能不是标准接口'), { statusCode: 502 });
   const content = req.parse(json);
-  if (!content) throw Object.assign(new Error('请求成功但返回内容为空，请确认模型名是否正确'), { statusCode: 502 });
-  return { model: settings.llmModel || '(服务商默认模型)', latencyMs: Date.now() - started };
+  return {
+    model: settings.llmModel || '(服务商默认模型)',
+    latencyMs: Date.now() - started,
+    emptyContent: !content,
+  };
 }
 
 async function llmChat(settings, system, user) {

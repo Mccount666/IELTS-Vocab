@@ -122,11 +122,24 @@ Page({
       });
       const sec = (res.latencyMs / 1000).toFixed(1);
       this.setData({ testStatus: `连接正常 · ${sec}s` });
-      toast('连接正常', 'success');
+      toast(res.emptyContent ? '连接正常（模型未返回正文，不影响使用）' : '连接正常', 'success');
     } catch (err) {
       const msg = err.message || '测试失败';
       this.setData({ testStatus: '连接失败' });
-      wx.showModal({ title: '连接失败', content: msg, showCancel: false, confirmText: '知道了' });
+      wx.showModal({
+        title: '连接失败',
+        content: msg,
+        confirmText: '复制错误',
+        cancelText: '关闭',
+        success: (res) => {
+          if (!res.confirm) return;
+          wx.setClipboardData({
+            data: msg,
+            success: () => toast('错误信息已复制', 'success'),
+            fail: () => wx.showModal({ title: '复制失败，请手动复制', content: msg, showCancel: false, confirmText: '知道了' }),
+          });
+        },
+      });
     } finally {
       this.setData({ testing: false });
     }
