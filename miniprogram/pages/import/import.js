@@ -126,7 +126,7 @@ Page({
     loading('正在导入');
     try {
       const examType = examTypes[this.data.examIndex].value;
-      const inserted = await this.importSentences(sentences, filename, examType);
+      const inserted = await this.importSentences(sentences, filename, examType, text);
       this.setData({ filename: '', text: '', sentenceCount: 0, tokenCount: 0 });
       await this.refreshDocuments();
       toast(`已导入 ${inserted} 句`, 'success');
@@ -238,7 +238,7 @@ Page({
       // 5. 建文档 + 索引（与粘贴导入同一管线）
       this.setData({ fileState: 'importing', fileProgress: `建立索引（共 ${sentences.length} 句）…` });
       const examType = examTypes[this.data.fileExamIndex].value;
-      const inserted = await this.importSentences(sentences, docName, examType);
+      const inserted = await this.importSentences(sentences, docName, examType, fullText);
 
       this.setData({ files: [], docName: '', fileState: 'idle', fileProgress: '' });
       await this.refreshDocuments();
@@ -264,8 +264,8 @@ Page({
     throw new Error('MinerU 转换超时，请稍后重试');
   },
 
-  async importSentences(sentences, filename, examType) {
-    const doc = await api.createDocument({ filename, examType });
+  async importSentences(sentences, filename, examType, content = '') {
+    const doc = await api.createDocument({ filename, examType, content });
     let inserted = 0;
     for (let i = 0; i < sentences.length; i += CHUNK) {
       const res = await api.appendSentences({ documentId: doc.id, sentences: sentences.slice(i, i + CHUNK) });

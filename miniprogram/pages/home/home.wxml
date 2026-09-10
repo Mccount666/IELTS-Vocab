@@ -1,39 +1,28 @@
-<view class="container stack">
-  <view class="error-box" wx:if="{{error}}">{{error}}</view>
-  <view class="hero card">
-    <view class="hero-kicker">IELTS VOCAB</view>
-    <view class="hero-title">从你的真题里查单词</view>
-    <view class="hero-desc">导入阅读、听力或写作材料，查词时直接看到它在原文里出现过的句子。</view>
-    <view class="hero-actions">
-      <view class="btn primary" hover-class="btn-hover" bindtap="goSearch">开始查词</view>
-      <view class="btn secondary" hover-class="btn-hover" bindtap="goImport">导入文本</view>
-    </view>
-  </view>
+<view class="home-wrap">
+  <view class="glow glow-teal"></view>
+  <view class="glow glow-warm"></view>
 
-  <view class="stats-grid">
-    <view class="stat card">
-      <view class="stat-value">{{docCount}}</view>
-      <view class="stat-label">真题文档</view>
+  <view class="container stack">
+    <view class="error-box" wx:if="{{error}}">{{error}}</view>
+    <view class="hero">
+      <view class="hero-eyebrow">IELTS VOCAB</view>
+      <view class="hero-title">从你的真题里
+查单词</view>
+      <view class="hero-actions">
+        <view class="btn primary" hover-class="btn-hover" bindtap="goSearch">开始查词</view>
+        <view class="btn glass" hover-class="btn-hover" bindtap="goImport">导入文本</view>
+      </view>
     </view>
-    <view class="stat card">
-      <view class="stat-value">{{wordCount}}</view>
-      <view class="stat-label">收藏生词</view>
-    </view>
-  </view>
 
-  <view class="card stack">
-    <view class="section-title">使用方法</view>
-    <view class="step">
-      <view class="step-num">1</view>
-      <view class="step-text">粘贴文本或上传 PDF / 图片建立索引</view>
-    </view>
-    <view class="step">
-      <view class="step-num">2</view>
-      <view class="step-text">输入单词，查看来自原文的例句</view>
-    </view>
-    <view class="step">
-      <view class="step-num">3</view>
-      <view class="step-text">一键收录进生词本，随时回看</view>
+    <view class="stats-grid">
+      <view class="stat glass">
+        <view class="stat-value">{{docCount}}</view>
+        <view class="stat-label">真题文档</view>
+      </view>
+      <view class="stat glass">
+        <view class="stat-value">{{wordCount}}</view>
+        <view class="stat-label">收藏生词</view>
+      </view>
     </view>
   </view>
 </view>

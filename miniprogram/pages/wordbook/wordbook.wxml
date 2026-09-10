@@ -1,14 +1,9 @@
 <view class="container stack">
-  <view class="card stack">
-    <view class="between">
-      <view>
-        <view class="section-title">生词本</view>
-        <view class="muted">{{words.length}} 个收藏</view>
-      </view>
-    </view>
-  </view>
-
   <view class="stack" wx:if="{{words.length}}">
+    <view class="between wb-head">
+      <view class="section-title">生词本</view>
+      <view class="muted">{{words.length}} 个</view>
+    </view>
     <view class="word-card card" wx:for="{{words}}" wx:key="_id">
       <view class="between">
         <view class="word-main">
@@ -18,13 +13,12 @@
         <view class="btn danger delete-btn" hover-class="btn-hover" data-id="{{item._id}}" bindtap="deleteWord">删除</view>
       </view>
       <view class="definition" wx:if="{{item.translation || item.definition}}">{{item.translation || item.definition}}</view>
-      <view class="muted added-row" wx:if="{{item.addedDate}}">收藏于 {{item.addedDate}}</view>
     </view>
   </view>
 
   <view class="card empty" wx:else>
     <view class="section-title">还没有生词</view>
-    <view class="muted">在查词页把单词或例句收录进来。</view>
+    <view class="muted">在查词页收录单词或例句。</view>
     <view class="btn secondary go-search" hover-class="btn-hover" bindtap="goSearch">去查词</view>
   </view>
 </view>

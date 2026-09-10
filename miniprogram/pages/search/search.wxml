@@ -1,9 +1,8 @@
 <view class="container stack">
   <view class="card stack search-card">
-    <view class="section-title">查一个单词</view>
     <view class="search-row">
-      <input class="input search-input" maxlength="80" placeholder="例如 environment" value="{{word}}" confirm-type="search" bindinput="onWordInput" bindconfirm="submit" />
-      <view class="btn primary search-btn" hover-class="btn-hover" bindtap="submit">查</view>
+      <input class="input search-input" maxlength="80" placeholder="输入单词或短语" value="{{word}}" confirm-type="search" bindinput="onWordInput" bindconfirm="submit" />
+      <view class="btn primary search-btn" hover-class="btn-hover" bindtap="submit">查词</view>
     </view>
     <picker mode="selector" range="{{examTypes}}" range-key="label" value="{{examIndex}}" bindchange="onExamChange">
       <view class="picker-like">范围：{{examTypes[examIndex].label}}</view>
@@ -48,12 +47,11 @@
       </view>
     </view>
     <view class="muted center" wx:elif="{{dictLoading}}">释义加载中…</view>
-    <view class="muted center" wx:elif="{{!dictLoading && !dict}}">暂无词典结果，可点下方「✨ AI 解释」生成</view>
+    <view class="muted center" wx:elif="{{!dictLoading && !dict}}">暂无词典结果</view>
 
     <view class="dict-box ai-box stack" wx:if="{{aiDict}}">
       <view class="between">
-        <view class="ai-source">✨ AI 解释 · {{aiDict.source || 'LLM'}}</view>
-        <view class="muted ai-hint">AI 生成，仅供参考</view>
+        <view class="ai-source">✨ AI 解释</view>
       </view>
       <view wx:if="{{aiDict.phonetic}}" class="phonetic">{{aiDict.phonetic}}</view>
       <view wx:if="{{aiDict.translation}}" class="dict-translation">{{aiDict.translation}}</view>
@@ -86,7 +84,7 @@
 
   <view class="card empty" wx:elif="{{searched && !loading}}">
     <view class="section-title">还没有例句</view>
-    <view class="muted">请先在“导入”页粘贴真题文本，再回来查词。</view>
+    <view class="muted">先在「导入」页添加真题文本。</view>
     <view class="stack" wx:if="{{nearWords.length}}" style="margin-top: 24rpx; text-align: left;">
       <view class="muted">真题里的相近词：</view>
       <view class="chip-row" style="margin-top: 14rpx;">

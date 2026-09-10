@@ -3,9 +3,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 20rpx 0;
-  color: #3f6570;
+  color: #aebbc2;
   font-size: 28rpx;
-  border-bottom: 1rpx solid #eef6f3;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.07);
 }
 
 .info-row:last-child {
@@ -15,49 +15,42 @@
 .role-badge {
   padding: 6rpx 20rpx;
   border-radius: 999rpx;
-  background: #eafcf6;
-  color: #7d949e;
+  background: rgba(255, 255, 255, 0.07);
+  color: #9fb0b8;
   font-size: 24rpx;
 }
 
 .role-badge.admin {
-  background: #0d9488;
-  color: #ffffff;
-}
-
-.protocol-desc {
-  padding: 18rpx 20rpx;
-  border-radius: 16rpx;
-  background: #f0fbf7;
-  font-size: 24rpx;
+  background: linear-gradient(135deg, #3ee6c4, #17b9a4);
+  color: #06332c;
+  font-weight: 600;
 }
 
 .link-block {
-  padding: 22rpx 20rpx;
-  border-radius: 18rpx;
-  background: #f6fdfb;
-  border: 1rpx solid #ddf2ec;
+  padding: 20rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
 }
 
 .link-row {
   display: flex;
   flex-wrap: wrap;
   gap: 14rpx;
-  margin-top: 14rpx;
 }
 
 .link-chip {
   padding: 10rpx 22rpx;
   border-radius: 999rpx;
-  background: #ffffff;
-  border: 1rpx solid #0d9488;
-  color: #0d9488;
+  background: transparent;
+  border: 1rpx solid #2dd4bf;
+  color: #4fe3c1;
   font-size: 24rpx;
 }
 
 .link-chip:active {
-  background: #0d9488;
-  color: #ffffff;
+  background: #2dd4bf;
+  color: #06332c;
 }
 
 .model-row {
@@ -77,13 +70,33 @@
   height: 76rpx;
   line-height: 76rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #14b8a6, #0d9488);
-  color: #ffffff;
+  background: linear-gradient(135deg, #3ee6c4, #17b9a4);
+  color: #06332c;
   font-size: 26rpx;
   font-weight: 600;
-  box-shadow: 0 6rpx 18rpx rgba(13, 148, 136, 0.25);
+  box-shadow: 0 6rpx 18rpx rgba(45, 212, 191, 0.22);
 }
 
 .small-btn.disabled {
   opacity: 0.55;
+}
+
+.small-btn.ghost {
+  background: rgba(45, 212, 191, 0.10);
+  color: #4fe3c1;
+  box-shadow: none;
+}
+
+.test-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.test-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

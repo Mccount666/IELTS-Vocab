@@ -1,3 +1,7 @@
+.wb-head {
+  padding: 0 6rpx;
+}
+
 .word-card {
   padding: 28rpx;
 }
@@ -10,8 +14,8 @@
   display: inline-block;
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #0f766e;
-  background: #d9f6ee;
+  color: #4fe3c1;
+  background: rgba(45, 212, 191, 0.12);
   border-radius: 999rpx;
   padding: 4rpx 20rpx;
 }
@@ -26,17 +30,11 @@
 .definition {
   margin-top: 20rpx;
   padding: 18rpx 22rpx;
-  border-radius: 16rpx;
-  background: #f6fdfb;
-  border: 1rpx solid #e2f3ee;
-  color: #27454e;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.05);
+  color: #dfe7eb;
   font-size: 28rpx;
   line-height: 1.65;
-}
-
-.added-row {
-  margin-top: 12rpx;
-  font-size: 23rpx;
 }
 
 .empty {

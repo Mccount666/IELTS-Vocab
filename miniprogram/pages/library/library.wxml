@@ -1,0 +1,39 @@
+<view class="container stack">
+  <block wx:if="{{!current}}">
+    <view class="between head">
+      <view class="section-title">文库</view>
+      <view class="muted">{{documents.length}} 篇</view>
+    </view>
+
+    <view class="card doc" wx:for="{{documents}}" wx:key="_id" data-id="{{item._id}}" bindtap="openDoc">
+      <view class="doc-main">
+        <view class="doc-name">{{item.filename}}</view>
+        <view class="doc-meta">
+          <view class="doc-exam">{{item.examTypeLabel}}</view>
+          <view class="muted">{{item.sentenceCount || 0}} 句</view>
+        </view>
+      </view>
+      <view class="doc-arrow">›</view>
+    </view>
+
+    <view class="card empty" wx:if="{{!loading && !documents.length}}">
+      <view class="section-title">还没有文档</view>
+      <view class="muted">在「导入」页上传真题文本。</view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="between head">
+      <view class="back" hover-class="back-hover" bindtap="closeDoc">‹ 文库</view>
+      <view class="muted" wx:if="{{!current.content}}">{{current.sentences.length}} 句</view>
+    </view>
+    <view class="doc-fullname">{{current.filename}}</view>
+
+    <view class="article card" wx:if="{{current.content}}">{{current.content}}</view>
+
+    <block wx:else>
+      <view class="muted fallback-note">该文档未保存原文，按句展示。</view>
+      <view class="sentence" wx:for="{{current.sentences}}" wx:key="_id">{{item.text}}</view>
+    </block>
+  </block>
+</view>

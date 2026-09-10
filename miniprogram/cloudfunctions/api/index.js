@@ -42,6 +42,7 @@ exports.main = async (event) => {
       'documents.delete': () => deleteDocument(openid, data),
       'documents.appendSentences': () => appendSentences(openid, data),
       'sentences.get': () => getSentence(openid, data),
+      'sentences.listByDocument': () => listSentencesByDocument(openid, data),
       'search.query': () => search(openid, data),
       'search.suggest': () => suggest(openid, data),
       'search.context': () => context(openid, data),
@@ -54,6 +55,7 @@ exports.main = async (event) => {
       'settings.get': () => getSettings(openid),
       'settings.save': () => saveSettings(openid, data),
       'llm.models': () => llmModels(openid, data),
+      'llm.test': () => llmTest(openid, data),
       'llm.define': () => llmDefine(openid, data),
       'llm.translate': () => llmTranslate(openid, data),
       'dictionary.lookup': () => dictionaryLookup(openid, data),
@@ -268,8 +270,10 @@ async function initUser(openid) {
 async function createDocument(openid, data) {
   const filename = requireText(data.filename, 'filename').slice(0, 255);
   const examType = String(data.examType || data.exam_type || 'Other').trim().slice(0, 32) || 'Other';
+  // 原文/Markdown 全文随文档保存，文库页整文回读；上限 50 万字符防超限
+  const content = typeof data.content === 'string' ? data.content.slice(0, 500000) : '';
   const added = await db.collection('documents').add({
-    data: { _openid: openid, filename, examType, importedAt: nowIso(), sentenceCount: 0 },
+    data: { _openid: openid, filename, examType, content, importedAt: nowIso(), sentenceCount: 0 },
   });
   return { id: added._id, sentenceCount: 0 };
 }
@@ -358,6 +362,21 @@ async function getSentence(openid, data) {
   const row = await getOwnedDoc('sentences', openid, id);
   if (!row) throw Object.assign(new Error('句子不存在或不属于你'), { statusCode: 404 });
   return { sentence: row };
+}
+
+async function listSentencesByDocument(openid, data) {
+  const documentId = requireText(data.documentId, 'documentId');
+  const doc = await getOwnedDoc('documents', openid, documentId);
+  if (!doc) throw Object.assign(new Error('文档不存在或不属于你'), { statusCode: 404 });
+  const res = await db.collection('sentences')
+    .where({ _openid: openid, documentId: doc._id })
+    .orderBy('position', 'asc')
+    .limit(1000)
+    .get();
+  return {
+    document: { _id: doc._id, filename: doc.filename, examType: doc.examType, content: doc.content || '' },
+    sentences: res.data.map((s) => ({ _id: s._id, text: s.text, position: s.position })),
+  };
 }
 
 async function search(openid, data) {
@@ -684,6 +703,41 @@ async function llmModels(openid, data) {
     .slice(0, 100);
   if (!models.length) throw Object.assign(new Error('模型列表为空，请检查 Base URL 是否支持 /models 接口'), { statusCode: 502 });
   return { models };
+}
+
+// 连通性探测：用最小请求实测一次完整链路（含中转站），成功返回延迟，
+// 失败把 HTTP 状态码 + 响应体 / 网络错误码完整带回，方便用户排查
+async function llmTest(openid, data) {
+  const saved = await getSettingsRow(openid);
+  const settings = {
+    ...saved,
+    llmProtocol: data.llmProtocol || saved.llmProtocol,
+    llmBaseUrl: data.llmBaseUrl || saved.llmBaseUrl,
+    llmApiKey: data.llmApiKey || saved.llmApiKey,
+    llmModel: data.llmModel || saved.llmModel,
+  };
+  if (!settings.llmApiKey) throw Object.assign(new Error('请先填写 LLM API Key'), { statusCode: 400 });
+
+  const req = buildLlmRequest(settings, 'You are a connectivity probe.', 'Reply with the single word: pong');
+  const body = JSON.parse(req.body);
+  body.max_tokens = 16;
+  req.body = JSON.stringify(body);
+
+  const started = Date.now();
+  const resp = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body, timeout: 30000 }).catch((err) => {
+    const net = err && err.code ? `（${err.code}）` : '';
+    const hint = err && err.type === 'request-timeout' ? '连接超时（30 秒），中转站可能不可达或响应过慢' : `网络连接失败${net}：${err.message || err}`;
+    throw Object.assign(new Error(hint), { statusCode: 502 });
+  });
+  if (!resp.ok) {
+    const detail = (await resp.text().catch(() => '')).slice(0, 400);
+    throw Object.assign(new Error(`HTTP ${resp.status}${detail ? '：' + detail : ''}`), { statusCode: 502 });
+  }
+  const json = await resp.json().catch(() => null);
+  if (!json) throw Object.assign(new Error('返回不是合法 JSON（中转站可能返回了错误页或登录页 HTML）'), { statusCode: 502 });
+  const content = req.parse(json);
+  if (!content) throw Object.assign(new Error('请求成功但返回内容为空，请确认模型名是否正确'), { statusCode: 502 });
+  return { model: settings.llmModel || '(服务商默认模型)', latencyMs: Date.now() - started };
 }
 
 async function llmChat(settings, system, user) {

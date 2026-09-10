@@ -15,7 +15,7 @@ Page({
   },
 
   goSearch() {
-    wx.switchTab({ url: '/pages/search/search' });
+    wx.navigateTo({ url: '/pages/search/search' });
   },
 
   async refresh(done) {

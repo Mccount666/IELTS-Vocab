@@ -38,10 +38,10 @@ Page({
   },
 
   goSearch() {
-    wx.switchTab({ url: '/pages/search/search' });
+    wx.navigateTo({ url: '/pages/search/search' });
   },
 
   goImport() {
-    wx.switchTab({ url: '/pages/import/import' });
+    wx.navigateTo({ url: '/pages/import/import' });
   },
 });

@@ -15,9 +15,9 @@
   justify-content: space-between;
   gap: 20rpx;
   padding: 20rpx 22rpx;
-  border-radius: 20rpx;
-  background: #f8fdfb;
-  border: 1rpx solid #e2f3ee;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
 }
 
 .file-info {
@@ -26,28 +26,28 @@
 
 .file-name {
   font-size: 27rpx;
-  color: #27454e;
+  color: #dbe3e8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .file-remove {
-  color: #b42318;
+  color: #ff9d94;
   font-size: 24rpx;
   padding: 8rpx 16rpx;
-  background: #fff1f0;
+  background: rgba(255, 107, 97, 0.10);
   border-radius: 999rpx;
 }
 
 .progress-box {
   padding: 24rpx 20rpx;
   border-radius: 18rpx;
-  background: #f0fbf7;
+  background: rgba(45, 212, 191, 0.06);
 }
 
 .progress-text {
-  color: #3f6570;
+  color: #aebbc2;
   font-size: 26rpx;
   text-align: center;
 }
@@ -56,7 +56,7 @@
   margin-top: 18rpx;
   height: 6rpx;
   border-radius: 999rpx;
-  background: #d5f1e8;
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
   position: relative;
 }
@@ -66,7 +66,7 @@
   left: -60rpx;
   width: 60rpx;
   height: 6rpx;
-  background: #0d9488;
+  background: #2dd4bf;
   border-radius: 999rpx;
   animation: slide 1.4s linear infinite;
 }
@@ -79,10 +79,10 @@
 .error-box {
   padding: 24rpx;
   border-radius: 18rpx;
-  background: #fff1f0;
-  border: 1rpx solid #ffa39e;
-  color: #b42318;
-  font-size: 26rpx;
+  background: rgba(255, 107, 97, 0.10);
+  border: 1rpx solid rgba(255, 107, 97, 0.28);
+  color: #ff9d94;
+  font-size: 25rpx;
   line-height: 1.6;
   word-break: break-all;
 }
@@ -98,9 +98,9 @@
   gap: 20rpx;
   align-items: center;
   padding: 24rpx 22rpx;
-  border-radius: 20rpx;
-  background: #f8fdfb;
-  border: 1rpx solid #e2f3ee;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
 }
 
 .doc-main {
@@ -118,16 +118,16 @@
 .doc-exam {
   flex-shrink: 0;
   font-size: 22rpx;
-  color: #0f766e;
-  background: #d9f6ee;
+  color: #4fe3c1;
+  background: rgba(45, 212, 191, 0.12);
   border-radius: 999rpx;
   padding: 4rpx 18rpx;
 }
 
 .doc-name {
   font-size: 30rpx;
-  font-weight: 700;
-  color: #1f3d44;
+  font-weight: 600;
+  color: #eef2f4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
