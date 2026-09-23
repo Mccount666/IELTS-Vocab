@@ -54,6 +54,11 @@ python main.py
 - 小程序版：微信 OPENID 免登录，所有业务走云函数校验 `_openid` 归属，管理员身份固定钉在 `site_settings.adminOpenid`；
 - 两个后端各自独立，互不影响。
 
+## Contributors
+
+- [Mccount666](https://github.com/Mccount666) — 项目作者
+- [Claude](https://claude.ai) — AI 辅助开发
+
 ## License
 
 个人学习项目，仅供参考。
